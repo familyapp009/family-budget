@@ -177,6 +177,97 @@ function render() {
   $("#app").innerHTML=intro+sum+controls+(state.settings?'<div class="card" style="margin-bottom:20px"><h2>Monthly settings</h2><p class="muted">Only the total automatic obligations belong here. No savings field.</p>'+monthForm()+'</div>':'')+
     '<div class="two-col"><div class="stack">'+goals+recent+'</div><div class="stack">'+form+'</div></div>';
 }
+function renderBudgetDefaults() {
+  const base = state.householdDefaults ?? {net_income_cents:0,euro_to_usd:1.14};
+  const total = totalFixedObligations(state.obligations,base.euro_to_usd);
+  const bills = state.obligations.map((bill,i)=>'<div class="bill-item" data-id="'+clean(bill.id)+'">'+
+    '<div class="row spread"><strong>Automatic bill '+(i+1)+'</strong><button type="button" class="danger mini" data-action="delete-bill" data-id="'+clean(bill.id)+'">Remove</button></div>'+
+    '<label>Expense name<input data-field="label" maxlength="80" required value="'+clean(bill.label)+'"></label>'+
+    '<div class="fields"><label>Amount<input data-field="amount" type="number" min="0" max="999999999" step=".01" required value="'+moneyInput(bill.original_amount_cents)+'"></label>'+
+    '<label>Currency<select data-field="currency"><option value="USD" '+(bill.currency==="USD"?"selected":"")+'>USD $</option><option value="EUR" '+(bill.currency==="EUR"?"selected":"")+'>EUR €</option></select></label></div>'+
+    '<label class="checkline"><input type="checkbox" data-field="enabled" '+(bill.enabled?"checked":"")+'> Include in recurring total</label></div>').join("");
+  $("#app").innerHTML='<div class="page-head"><div><p class="eyebrow">Behind the scenes</p><h1>Household defaults</h1>'+
+    '<p class="muted">Edit these only when pay or an automatic bill changes. Neither the bills nor savings appear on your main dashboard.</p></div>'+
+    '<button data-action="budget-defaults">Back to budget</button></div>'+
+    '<div class="card" style="max-width:760px"><div class="notice">These values prefill every <strong>new</strong> month. An existing monthly budget keeps its previous amounts unless you explicitly update it in Monthly settings.</div>'+
+    '<form id="defaults-form"><h2>Normal income and exchange rate</h2>'+
+    '<div class="fields" style="margin-top:15px"><label>Normal two-paycheck net income (USD)<input name="net" type="number" min="0" max="999999999" step=".01" required value="'+moneyInput(base.net_income_cents)+'"></label>'+
+    '<label>EUR → USD rate<input name="rate" type="number" min=".000001" max="9.999999" step=".000001" required value="'+clean(base.euro_to_usd)+'"></label></div>'+
+    '<div class="sec-head"><h2>Automatic monthly obligations</h2><span class="pill">'+state.obligations.filter(b=>b.enabled).length+' included</span></div>'+
+    '<p class="muted">Each enabled item is subtracted once when a new month is created. Do not include payroll deductions or individual credit-card repayments.</p>'+
+    '<div class="bill-editor">'+(bills||'<p class="muted">No recurring bills saved. Add one below.</p>')+'</div>'+
+    '<h3 style="margin-top:16px">Add another automatic bill (optional)</h3>'+
+    '<div class="fields"><label>Name<input name="newLabel" maxlength="80" placeholder="e.g. Subscription"></label><label>Amount<input name="newAmount" type="number" min="0" max="999999999" step=".01" placeholder="0.00"></label></div>'+
+    '<label>Currency<select name="newCurrency"><option value="USD">USD $</option><option value="EUR">EUR €</option></select></label>'+
+    '<div class="notice" style="margin-top:16px"><div class="detail-list"><span>Recurring monthly total</span><span id="defaults-fixed-preview">'+formatUsd(total)+'</span>'+
+    '<span>Starting monthly spending allowance</span><span id="defaults-pool-preview">'+formatUsd(Number(base.net_income_cents)-total)+'</span></div></div>'+
+    '<div class="row"><button class="primary" type="submit">Save household defaults</button><button type="button" data-action="budget-defaults">Cancel</button></div></form>'+
+    '</div>';
+}
+function readDefaultBillDraft(form) {
+  const net = parseAmount(form.elements.net.value);
+  const rate = Number(form.elements.rate.value);
+  if (!(rate > 0 && rate < 10)) throw new Error("Enter a valid EUR to USD rate.");
+  const rows=[...form.querySelectorAll(".bill-item")].map(el=>{
+    const field = name => el.querySelector('[data-field="'+name+'"]');
+    const label=field("label").value.trim();
+    if(!label || label.length>80)throw new Error("Each automatic bill needs a name.");
+    return {
+      id:el.dataset.id,label,original_amount_cents:parseAmount(field("amount").value),
+      currency:field("currency").value,enabled:field("enabled").checked
+    };
+  });
+  const newLabel=form.elements.newLabel.value.trim();
+  if(newLabel) {
+    if(newLabel.length>80 || !form.elements.newAmount.value) throw new Error("Complete the new bill's name and amount.");
+    rows.push({id:null,label:newLabel,original_amount_cents:parseAmount(form.elements.newAmount.value),
+      currency:form.elements.newCurrency.value,enabled:true});
+  } else if(form.elements.newAmount.value) throw new Error("Enter a name for the new bill.");
+  if(new Set(rows.map(x=>x.label.toLocaleLowerCase())).size!==rows.length)throw new Error("Each automatic bill needs a distinct name.");
+  const total=totalFixedObligations(rows,rate);
+  return {net,rate,rows,total};
+}
+function updateDefaultsPreview() {
+  const form=$("#defaults-form");
+  if(!form)return;
+  try {
+    const draft=readDefaultBillDraft(form);
+    $("#defaults-fixed-preview").textContent=formatUsd(draft.total);
+    $("#defaults-pool-preview").textContent=formatUsd(draft.net-draft.total);
+  }catch{
+    $("#defaults-fixed-preview").textContent="Complete all amounts";
+    $("#defaults-pool-preview").textContent="—";
+  }
+}
+async function saveBudgetDefaults(form) {
+  const {net,rate,rows}=readDefaultBillDraft(form);
+  if(state.demo) {
+    state.householdDefaults={household_id:"demo",net_income_cents:net,euro_to_usd:rate};
+    state.obligations=rows.map((r,i)=>({...r,id:r.id??uid(),household_id:"demo",display_order:i}));
+  } else {
+    const db=state.client,h=state.member.household_id;
+    assertDb(await db.from("household_budget_defaults").upsert({
+      household_id:h,net_income_cents:net,euro_to_usd:rate
+    },{onConflict:"household_id"}).select("household_id").single());
+    const existing=rows.filter(r=>r.id).map((r,i)=>({...r,household_id:h,display_order:i}));
+    if(existing.length) assertDb(await db.from("fixed_obligation_defaults").upsert(existing,{onConflict:"id"}).select("id"));
+    const newItem=rows.find(r=>!r.id);
+    if(newItem) {
+      const {id,...data}=newItem;
+      assertDb(await db.from("fixed_obligation_defaults").insert({...data,household_id:h,display_order:rows.length-1}).select("id").single());
+    }
+  }
+  await loadMonth();
+  toast("Recurring household defaults saved. Existing monthly budgets are unchanged.");
+}
+async function deleteBill(id) {
+  if(!confirm("Remove this recurring bill from future monthly defaults? Existing months will not change."))return;
+  if(state.demo)state.obligations=state.obligations.filter(b=>b.id!==id);
+  else assertDb(await state.client.from("fixed_obligation_defaults").delete().eq("id",id)
+    .eq("household_id",state.member.household_id).select("id").single());
+  await loadMonth();
+  toast("Recurring bill removed. Existing months are unchanged.");
+}
 function renderAuth() {
   $("#app").innerHTML='<div class="auth-box"><p class="eyebrow">Private household access</p><h1>Welcome home.</h1><p class="muted">Sign in using an account that has been invited and added to the family household.</p><div class="card">'+
     '<form id="login-form"><label>Email<input type="email" name="email" autocomplete="email" required placeholder="name@example.com"></label>'+
