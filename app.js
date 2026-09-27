@@ -174,7 +174,7 @@ function render() {
   const recent = '<section class="card"><div class="card-header"><div><h2>Purchases</h2><p class="muted">Shared across both phones.</p></div><button class="mini" data-action="export">Export CSV</button></div><div class="transactions">'+(items||'<div class="empty">No purchases recorded this month.</div>')+'</div></section>';
   const form = '<section class="card"><div class="card-header"><div><h2>'+(state.editingExpense?'Edit purchase':'Add a purchase')+'</h2><p class="muted">Enter only the purchases you actively make.</p></div></div>'+expenseForm()+'</section>';
   const controls='<div class="row spread" style="margin-bottom:14px"><span class="muted" id="live-update-note">'+clean(state.feedback)+'</span><div class="row"><button class="quiet mini" data-action="refresh">↻ Refresh</button><button class="mini" data-action="budget-defaults">Budget defaults</button><button class="mini" data-action="settings">'+(state.settings?'Close settings':'Settings')+'</button></div></div>';
-  $("#app").innerHTML=intro+sum+controls+(state.settings?'<div class="card" style="margin-bottom:20px"><h2>Monthly settings</h2><p class="muted">Only the total automatic obligations belong here. No savings field.</p>'+monthForm()+'</div>':'')+
+  $("#app").innerHTML=intro+sum+controls+(state.settings?'<div class="card" style="margin-bottom:20px"><h2>Monthly settings</h2><p class="muted">Only the total automatic obligations belong here. No savings field. These values belong to the selected month.</p>'+monthForm()+'<div class="row" style="margin-top:12px"><button class="mini" data-action="prefill-month-defaults">Load current household defaults into these fields</button></div></div>':'')+
     '<div class="two-col"><div class="stack">'+goals+recent+'</div><div class="stack">'+form+'</div></div>';
 }
 function renderBudgetDefaults() {
@@ -426,7 +426,7 @@ async function handleAction(button) {
   if (action==="signout") {
     const {error}=await state.client.auth.signOut();
     if(error) throw error;
-    state.user=null;state.member=null;state.plan=null;
+    state.user=null;state.member=null;state.plan=null;state.householdDefaults=null;state.obligations=[];
     if(state.channel){await state.client.removeChannel(state.channel);state.channel=null;}
     render();return;
   }
@@ -489,6 +489,8 @@ document.addEventListener("submit",async event=>{
   } catch(e){toast(e.message||"Could not save.");}
   finally{if(submit?.isConnected)submit.disabled=false;}
 });
+document.addEventListener("input",event=>{if(event.target.closest("#defaults-form"))updateDefaultsPreview();});
+document.addEventListener("change",event=>{if(event.target.closest("#defaults-form"))updateDefaultsPreview();});
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&!state.loading&&state.user&&state.member)void loadMonth();});
 
 async function startup() {
