@@ -13,7 +13,7 @@ const state = {
   month: monthNow(), client: null, user: null, member: null, plan: null,
   previous: null, previousGuidelines: [], guidelines: [], purchases: [],
   editingExpense: null, editingCategory: null, settings: false,
-  loading: true, error: "", feedback: "", channel: null, accountSettings: false
+  loading: true, error: "", feedback: "", channel: null, accountSettings: new URLSearchParams(location.search).has("account")
 };
 const demoMonths = new Map();
 let toastTimer;
@@ -147,7 +147,7 @@ function render() {
   const intro = '<div class="page-head"><div><p class="eyebrow">Household spending</p><h1>'+clean(monthLabel(state.month))+
     '</h1><p class="muted">One balance. Flexible guidelines. No savings calculations.</p></div>'+monthPicker()+'</div>';
   if (!state.plan) {
-    $("#app").innerHTML=intro+'<div class="card"><h2>Set up this month</h2><p class="muted">Confirm the normal two-paycheck income and total automatic obligations. They will stay out of the main dashboard.</p>'+monthForm()+'</div>';
+    $("#app").innerHTML=intro+'<div class="row spread" style="margin-bottom:14px"><button class="mini" data-action="account-settings">Account settings / Set password</button></div><div class="card"><h2>Set up this month</h2><p class="muted">Confirm the normal two-paycheck income and total automatic obligations. They will stay out of the main dashboard.</p>'+monthForm()+'</div>';
     return;
   }
   const o = overview(state.plan, state.guidelines, state.purchases);
