@@ -71,3 +71,33 @@ textarea{min-height:66px;resize:vertical}.row{display:flex;gap:9px;flex-wrap:wra
 .last-added-actions .undo{background:#205742;border-color:#205742;color:white}
 .last-added-actions .undo:hover{background:#194533}
 @media(max-width:420px){.last-added{flex-wrap:wrap}.last-added-actions{margin-left:auto}}
+
+/* Dashboard progress: category targets are guidance, not spending envelopes. */
+.total-progress{padding-top:18px;margin-top:17px;border-top:1px solid #ffffff30}
+.total-progress-label{display:flex;gap:8px;justify-content:space-between;align-items:baseline;margin-bottom:10px;font-size:12px;color:#c5d9ce}
+.total-progress-label strong{font-size:12px;font-variant-numeric:tabular-nums;color:#fff}
+.progress-track{height:10px;width:100%;background:#e8eee8;border-radius:99px;overflow:hidden}
+.progress-fill{height:100%;width:0;background:#398464;border-radius:inherit;transition:width .2s ease-out}
+.progress-track.overall{background:#ffffff30}
+.progress-track.overall .progress-fill{background:#9bd1aa}
+.progress-track.overall.is-over .progress-fill{background:#f7ac91}
+.category-progress-list{display:grid;gap:0}
+.category-progress{padding:16px 0;border-top:1px solid #edf1eb}
+.category-progress:first-child{border-top:0;padding-top:0}
+.category-progress:last-child{padding-bottom:0}
+.category-progress-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:7px}
+.category-progress-heading h3{margin:0;line-height:1.3;font-size:15px;overflow-wrap:anywhere}
+.category-status{font-size:13px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.category-progress-metrics{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:11px;font-size:12px;color:#697e72;font-variant-numeric:tabular-nums}
+.category-progress-metrics strong{font-size:11px;white-space:nowrap;color:#526f5d}
+.category-progress.is-near .progress-fill{background:#c18b43}
+.category-progress.is-over .progress-fill{background:#bd4e3c}
+.category-progress.is-over .category-progress-metrics strong{color:#bd4e3c}
+.progress-help{margin:13px 0 0;padding-top:11px;border-top:1px solid #edf1eb;font-size:11px}
+.settings-categories{border-top:1px solid #e1e8df;margin-top:24px;padding-top:6px}
+.settings-categories .sec-head{margin-top:15px}
+.settings-category-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid #eef1ed}
+.settings-category-row strong,.settings-category-row span{display:block}
+.settings-category-row strong{font-size:13px}
+.settings-category-row span{font-size:11px;color:#718378;margin-top:4px;font-variant-numeric:tabular-nums}
+@media(max-width:420px){.category-progress-metrics{flex-wrap:wrap;row-gap:4px}.category-progress-heading h3{font-size:14px}}
