@@ -23,20 +23,36 @@ export function shiftMonth(month, delta) {
   const [year, m] = month.split("-").map(Number);
   return monthNow(new Date(year, m - 1 + delta, 1));
 }
+export function usagePercent(spentCents, targetCents) {
+  const spent = Number(spentCents);
+  const target = Number(targetCents);
+  if (target <= 0) return null; // No guideline set; never suggest that spending is 100% used.
+  return Math.round((spent / target) * 100);
+}
 export function overview(plan, guidelines, purchases) {
   const starting = Number(plan.net_income_cents) - Number(plan.fixed_costs_cents);
   const spent = purchases.reduce((sum, item) => sum + Number(item.usd_cents), 0);
-  const byCategory = new Map();
-  for (const item of purchases) byCategory.set(item.category, (byCategory.get(item.category) || 0) + Number(item.usd_cents));
+  const byGuidelineId = new Map();
+  for (const item of purchases) {
+    const key = item.guideline_id;
+    if (key) byGuidelineId.set(key, (byGuidelineId.get(key) || 0) + Number(item.usd_cents));
+  }
+  const categoryRows = guidelines.map(g => {
+    // Transactions store guideline_id, not a category name.
+    const categorySpent = byGuidelineId.get(g.id) || 0;
+    return {
+      ...g,
+      spent: categorySpent,
+      remaining: Number(g.target_cents) - categorySpent,
+      percent: usagePercent(categorySpent, g.target_cents)
+    };
+  });
   return {
     starting,
     spent,
     remaining: starting - spent,
-    categories: guidelines.map(g => ({
-      ...g,
-      spent: byCategory.get(g.category) || 0,
-      remaining: Number(g.target_cents) - (byCategory.get(g.category) || 0)
-    }))
+    percent: usagePercent(spent, starting),
+    categories: categoryRows
   };
 }
 export function sameMonth(isoDate, month) {
