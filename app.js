@@ -1,4 +1,4 @@
-import { parseAmount, usdCents, formatUsd, monthNow, shiftMonth, overview, sameMonth } from "./budget-core.js";
+import { parseAmount, usdCents, formatUsd, monthNow, shiftMonth, overview, sameMonth, totalFixedObligations } from "./budget-core.js";
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "./config.js";
 
 const $ = (selector) => document.querySelector(selector);
@@ -11,7 +11,7 @@ const uid = () => typeof crypto !== "undefined" && crypto.randomUUID ? crypto.ra
 const state = {
   demo: new URLSearchParams(location.search).get("demo") === "1",
   month: monthNow(), client: null, user: null, member: null, plan: null,
-  previous: null, previousGuidelines: [], guidelines: [], purchases: [],
+  previous: null, previousGuidelines: [], guidelines: [], purchases: [], householdDefaults: null, obligations: [], budgetDefaultsPage: new URLSearchParams(location.search).has("defaults"),
   editingExpense: null, editingCategory: null, settings: false,
   loading: true, error: "", feedback: "", channel: null, accountSettings: new URLSearchParams(location.search).has("account")
 };
@@ -54,6 +54,8 @@ function demoSeed() {
     spent_on: month === "2026-09" ? date : month+"-01",
     original_amount_cents,currency,usd_cents:usdCents(original_amount_cents,currency,1.14),note,created_at:new Date().toISOString()
   }));
+  state.householdDefaults = { household_id:"demo",net_income_cents:800000,euro_to_usd:1.14 };
+  state.obligations = [{id:"demo-bill",household_id:"demo",label:"Sample automatic expenses",original_amount_cents:300000,currency:"USD",enabled:true,display_order:0}];
   demoMonths.set(month,{plan:{household_id:"demo",month,net_income_cents:800000,fixed_costs_cents:300000,euro_to_usd:1.14},guidelines:categories,purchases});
 }
 function loadDemo() {
@@ -80,7 +82,7 @@ async function loadMember() {
 function connectRealtime(householdId) {
   if (state.channel) void state.client.removeChannel(state.channel);
   let channel = state.client.channel("family-budget-" + householdId);
-  for (const table of ["monthly_plans","monthly_guidelines","purchases"]) {
+  for (const table of ["monthly_plans","monthly_guidelines","purchases","household_budget_defaults","fixed_obligation_defaults"]) {
     channel = channel.on("postgres_changes",{
       event:"*",schema:"public",table,filter:"household_id=eq."+householdId
     }, () => {
@@ -102,17 +104,21 @@ async function loadMonth() {
     await loadMember();
     if (!state.member) { state.plan = null; state.loading = false; render(); return; }
     const db = state.client, household_id = state.member.household_id, month = state.month;
-    const [planResult, catResult, purchasesResult, previousResult] = await Promise.all([
+    const [planResult, catResult, purchasesResult, previousResult, defaultsResult, obligationsResult] = await Promise.all([
       db.from("monthly_plans").select("*").eq("household_id",household_id).eq("month",month).maybeSingle(),
       db.from("monthly_guidelines").select("*").eq("household_id",household_id).eq("month",month).order("display_order").order("category"),
       db.from("purchases").select("*").eq("household_id",household_id).eq("month",month).order("spent_on",{ascending:false}).order("created_at",{ascending:false}),
-      db.from("monthly_plans").select("*").eq("household_id",household_id).eq("month",shiftMonth(month,-1)).maybeSingle()
+      db.from("monthly_plans").select("*").eq("household_id",household_id).eq("month",shiftMonth(month,-1)).maybeSingle(),
+      db.from("household_budget_defaults").select("*").eq("household_id",household_id).maybeSingle(),
+      db.from("fixed_obligation_defaults").select("*").eq("household_id",household_id).order("display_order").order("label")
     ]);
     if (state.month !== month) return;
     state.plan = assertDb(planResult);
     state.guidelines = assertDb(catResult) ?? [];
     state.purchases = assertDb(purchasesResult) ?? [];
     state.previous = assertDb(previousResult);
+    state.householdDefaults = assertDb(defaultsResult);
+    state.obligations = assertDb(obligationsResult) ?? [];
     state.previousGuidelines = [];
     if (!state.plan && state.previous) {
       const prev = await db.from("monthly_guidelines").select("*").eq("household_id",household_id)
@@ -183,14 +189,16 @@ function renderPending() {
     '<p class="muted">Supabase user ID (share with the project administrator):</p><code style="font-size:11px;overflow-wrap:anywhere">'+clean(state.user.id)+'</code></div><button data-action="refresh">Check again</button></div>';
 }
 function monthForm() {
-  const plan = state.plan ?? state.previous;
-  const fromPrevious = !state.plan && !!state.previous;
-  const income = plan ? moneyInput(plan.net_income_cents) : "";
-  const fixed = plan ? moneyInput(plan.fixed_costs_cents) : "";
+  const plan = state.plan;
+  const base = state.householdDefaults;
+  const fromPrevious = !plan && !!state.previous;
+  const rate = plan?.euro_to_usd ?? base?.euro_to_usd ?? 1.14;
+  const income = moneyInput(plan?.net_income_cents ?? base?.net_income_cents ?? 0);
+  const fixed = moneyInput(plan?.fixed_costs_cents ?? totalFixedObligations(state.obligations, rate));
   return '<form id="month-form"><div class="fields"><label>Two-paycheck net income (USD)<input type="number" min="0" max="999999999" step=".01" name="net" required placeholder="0.00" value="'+clean(income)+'"></label>'+
     '<label>Automatic monthly obligations (USD)<input type="number" min="0" max="999999999" step=".01" name="fixed" required placeholder="0.00" value="'+clean(fixed)+'"></label></div>'+
-    '<label>EUR → USD planning rate<input name="rate" type="number" step="0.000001" min="0.000001" max="9.999999" required value="'+clean(plan?.euro_to_usd ?? 1.14)+'"><span class="helper">Used for new EUR purchase entries. Existing transactions keep their recorded USD equivalent.</span></label>'+
-    (fromPrevious?'<div class="notice">Prefilled from the previous month. Saving also copies its category guidelines. You can change everything before saving.</div>':'')+
+    '<label>EUR → USD planning rate<input name="rate" type="number" step="0.000001" min="0.000001" max="9.999999" required value="'+clean(rate)+'"><span class="helper">Used for new EUR purchase entries. Existing transactions keep their recorded USD equivalent.</span></label>'+
+    (fromPrevious?'<div class="notice">Income and fixed costs use the saved household defaults. Category guidelines are copied from the previous month.</div>':'')+
     '<div class="row"><button class="primary" type="submit">'+(state.plan?"Save settings":"Create month")+'</button>'+(state.plan?'<button type="button" data-action="settings">Cancel</button>':'')+'</div></form>';
 }
 function categoryForm() {
