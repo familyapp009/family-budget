@@ -12,7 +12,7 @@ const state = {
   demo: new URLSearchParams(location.search).get("demo") === "1",
   month: monthNow(), client: null, user: null, member: null, plan: null,
   previous: null, previousGuidelines: [], guidelines: [], purchases: [], householdDefaults: null, obligations: [], budgetDefaultsPage: new URLSearchParams(location.search).has("defaults"),
-  editingExpense: null, editingCategory: null, settings: false,
+  editingExpense: null, editingCategory: null, expenseComposerOpen: false, settings: false,
   loading: true, error: "", feedback: "", channel: null, accountSettings: new URLSearchParams(location.search).has("account")
 };
 const demoMonths = new Map();
@@ -172,10 +172,15 @@ function render() {
     return '<div class="transaction"><div class="transaction-details"><strong>'+clean(cat)+(p.note?' · '+clean(p.note):'')+'</strong><span>'+clean(p.spent_on)+native+'</span></div><div class="transaction-end"><strong>'+formatUsd(p.usd_cents)+'</strong><button class="quiet mini" data-action="edit-expense" data-id="'+clean(p.id)+'" aria-label="Edit purchase">Edit</button><button class="quiet mini" data-action="delete-expense" data-id="'+clean(p.id)+'" aria-label="Delete purchase">×</button></div></div>';
   }).join("");
   const recent = '<section class="card"><div class="card-header"><div><h2>Purchases</h2><p class="muted">Shared across both phones.</p></div><button class="mini" data-action="export">Export CSV</button></div><div class="transactions">'+(items||'<div class="empty">No purchases recorded this month.</div>')+'</div></section>';
-  const form = '<section class="card"><div class="card-header"><div><h2>'+(state.editingExpense?'Edit purchase':'Add a purchase')+'</h2><p class="muted">Enter only the purchases you actively make.</p></div></div>'+expenseForm()+'</section>';
+  const composerOpen = state.expenseComposerOpen || Boolean(state.editingExpense);
+  const composer = '<section class="card quick-expense '+(composerOpen?'is-open':'')+'" id="quick-expense">'+
+    '<div class="card-header"><div><h2>Quick expense</h2><p class="muted">Record a purchase as you make it.</p></div>'+
+    '<button class="primary quick-expense-toggle" type="button" data-action="toggle-expense" aria-expanded="'+composerOpen+'" aria-controls="quick-expense-entry">'+
+    (composerOpen?'Close':'＋ Add expense')+'</button></div>'+
+    (composerOpen?'<div id="quick-expense-entry">'+expenseForm()+'</div>':'')+'</section>';
   const controls='<div class="row spread" style="margin-bottom:14px"><span class="muted" id="live-update-note">'+clean(state.feedback)+'</span><div class="row"><button class="quiet mini" data-action="refresh">↻ Refresh</button><button class="mini" data-action="budget-defaults">Budget defaults</button><button class="mini" data-action="settings">'+(state.settings?'Close settings':'Settings')+'</button></div></div>';
-  $("#app").innerHTML=intro+sum+controls+(state.settings?'<div class="card" style="margin-bottom:20px"><h2>Monthly settings</h2><p class="muted">Only the total automatic obligations belong here. No savings field. These values belong to the selected month.</p>'+monthForm()+'<div class="row" style="margin-top:12px"><button class="mini" data-action="prefill-month-defaults">Load current household defaults into these fields</button></div></div>':'')+
-    '<div class="two-col"><div class="stack">'+goals+recent+'</div><div class="stack">'+form+'</div></div>';
+  $("#app").innerHTML=intro+sum+composer+controls+(state.settings?'<div class="card" style="margin-bottom:20px"><h2>Monthly settings</h2><p class="muted">Only the total automatic obligations belong here. No savings field. These values belong to the selected month.</p>'+monthForm()+'<div class="row" style="margin-top:12px"><button class="mini" data-action="prefill-month-defaults">Load current household defaults into these fields</button></div></div>':'')+
+    '<div class="two-col"><div class="stack">'+goals+'</div><div class="stack">'+recent+'</div></div>';
 }
 function renderBudgetDefaults() {
   const base = state.householdDefaults ?? {net_income_cents:0,euro_to_usd:1.14};
@@ -313,7 +318,7 @@ function expenseForm() {
     '<label>Date<input name="date" type="date" required value="'+clean(date)+'"></label>'+
     '<label>Note (optional)<input name="note" maxlength="280" value="'+clean(purchase?.note??"")+'" placeholder="What was it?"></label>'+
     '<div class="row"><button class="primary" type="submit" '+(!choices?'disabled':'')+'>'+(purchase?'Save changes':'Add purchase')+'</button>'+
-    (purchase?'<button type="button" data-action="cancel-edit">Cancel</button>':'')+'</div></form>';
+    '<button type="button" data-action="close-expense">Cancel</button></div></form>';
 }
 function passwordForm() {
   if (state.demo) return '<p class="muted">Passwords are not used in sample mode.</p>';
@@ -387,6 +392,7 @@ async function savePurchase(form) {
       .select("id").single());
   }
   state.editingExpense=null;
+  state.expenseComposerOpen=false;
   await loadMonth();
   toast(existing?"Purchase updated.":"Purchase recorded.");
 }
@@ -420,7 +426,7 @@ async function handleAction(button) {
   const action=button.dataset.action, id=button.dataset.id;
   if (action==="prev-month" || action==="next-month") {
     state.month=shiftMonth(state.month,action==="prev-month"?-1:1);
-    state.settings=false;state.editingExpense=null;state.editingCategory=null;
+    state.settings=false;state.editingExpense=null;state.editingCategory=null;state.expenseComposerOpen=false;
     await loadMonth();return;
   }
   if (action==="signout") {
@@ -439,10 +445,23 @@ async function handleAction(button) {
   if(action==="new-category"){state.editingCategory="new";render();return;}
   if(action==="manage-categories"){state.editingCategory=state.guidelines[0]?.id ?? "new";render();return;}
   if(action==="edit-category"){state.editingCategory=id;render();return;}
-  if(action==="edit-expense"){state.editingExpense=id;render();return;}
+  if(action==="toggle-expense"){
+    const wasOpen=state.expenseComposerOpen || Boolean(state.editingExpense);
+    state.expenseComposerOpen=!wasOpen;
+    state.editingExpense=null;
+    render();
+    if(state.expenseComposerOpen) $("#purchase-form input[name=amount]")?.focus({preventScroll:true});
+    return;
+  }
+  if(action==="close-expense"){state.expenseComposerOpen=false;state.editingExpense=null;render();return;}
+  if(action==="edit-expense"){
+    state.editingExpense=id;state.expenseComposerOpen=true;render();
+    $("#quick-expense")?.scrollIntoView({behavior:"smooth",block:"start"});
+    return;
+  }
   if(action==="delete-expense"){await deleteExpense(id);return;}
   if(action==="delete-category"){await deleteCategory(id);return;}
-  if(action==="cancel-edit"){state.editingExpense=null;state.editingCategory=null;render();return;}
+  if(action==="cancel-edit"){state.editingExpense=null;state.editingCategory=null;state.expenseComposerOpen=false;render();return;}
   if(action==="export"){exportCsv();return;}
 }
 document.addEventListener("click",async event=>{
