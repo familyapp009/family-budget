@@ -17,13 +17,14 @@ The database is configured with row-level security. Live user invitations and ho
 - USD and EUR purchase entry; exchange rate fixed per purchase when first recorded
 - Purchase edit and delete; household realtime refresh and refresh-on-return
 - Separate authenticated users assigned to the same household
+- Private, editable household-wide defaults for normal two-paycheck income, EUR/USD rate, and individual recurring obligations; new months use these defaults and keep historical snapshots
 - Minimal month settings hidden from the main dashboard
 - No saving allocations, account connection, card statements, or recurring-bill transaction entries
 
 ## Files
 
 - `index.html`, `styles.css`, `app.js`, `budget-core.js`, `config.js`: static client
-- `supabase/migrations/`: schema and security migrations already applied to the connected project
+- `supabase/migrations/`: schema, security, and recurring-default migrations applied to the connected project
 - `tests/` and `.github/workflows/checks.yml`: Node test suite and CI
 
 `config.js` contains a **browser-safe Supabase publishable key**, not a service-role key or database password. The frontend is public source. Every private row requires membership and database-enforced row-level policies.
@@ -52,3 +53,9 @@ The sample entries stay only in memory and disappear on reload. The demo never w
 ## Tests
 
 `npm test` (Node.js 22). Also run `node --check app.js` to check the browser module's syntax.
+
+## Recurring default behavior
+
+The two-paycheck net figure and seven confirmed automatic obligations have been seeded **privately in Supabase** rather than committed to this public repository. Review them from **Edit recurring defaults** before creating the first month. The car-paycheck allotment is already reflected in deposited net pay and is not counted again. Card-billed subscriptions that have not been reconciled and a possible additional future daycare cost were deliberately not included. No savings target or automatic savings transfer is used.
+
+Changes to household defaults only prefill **new** months. To change an existing month, open its Monthly settings, optionally load the updated household defaults into the editable fields, and explicitly save. Purchases already recorded preserve their USD snapshot when the exchange rate changes.
