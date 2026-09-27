@@ -17,12 +17,12 @@ test("months move across year boundaries and validate expense date", () => {
   assert.equal(sameMonth("2026-03-01","2026-02"), false);
 });
 test("guidelines can go negative and do not alter overall remaining", () => {
-  const plan = {net_income_cents:1161312, fixed_costs_cents:555982};
+  const plan = {net_income_cents:800000, fixed_costs_cents:300000};
   const g = [{category:"Groceries",target_cents:10000},{category:"Dining",target_cents:5000}];
   const purchases = [{category:"Groceries",usd_cents:13000},{category:"Dining",usd_cents:2000}];
   const result = overview(plan,g,purchases);
-  assert.equal(result.starting,605330);
-  assert.equal(result.remaining,590330);
+  assert.equal(result.starting,500000);
+  assert.equal(result.remaining,485000);
   assert.equal(result.categories[0].remaining,-3000);
   assert.equal(result.categories[1].remaining,3000);
 });
