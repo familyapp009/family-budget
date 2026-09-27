@@ -41,15 +41,7 @@ The sample entries stay only in memory and disappear on reload. The demo never w
 1. In GitHub repository **Settings → Pages**, choose **Deploy from a branch**, `main`, `/(root)` and save. Pages URLs and controls belong to GitHub, not Supabase.
 2. In Supabase **Authentication → URL Configuration**, set Site URL to `https://familyapp009.github.io/family-budget/` and add the same redirect URL to the allowed redirect list. Use the trailing slash.
 3. In Supabase **Authentication → Users**, use **Invite user** for each of the two adults. Review the invitation emails and sign in once. For an invitation link, the user can set a password from the application Settings panel after sign-in.
-4. Assign the two resulting Auth user IDs to one household through the trusted Supabase SQL editor or an authorized administrative action. **Never** add user IDs or membership-insertion SQL with real values to this public repository. Template:
-
-   ```sql
-   insert into public.households(name) values ('Family') returning id;
-   -- Use the returned household ID and verified Auth user IDs:
-   insert into public.household_members(household_id,user_id,role)
-   values ('HOUSEHOLD_UUID','FIRST_AUTH_USER_UUID','owner'),
-          ('HOUSEHOLD_UUID','SECOND_AUTH_USER_UUID','member');
-   ```
+4. A single empty household has already been initialized in Supabase. After both invitations, assign their verified Auth user IDs to that existing household through the trusted Supabase SQL editor or authorized administrative action. **Never** commit actual identifiers or membership grants to this public repository.
 
 5. In **Authentication settings**, disable public user self-registration. The app itself does not offer registration and requests magic links only for existing users.
 6. Verify both accounts can see the same household, that a new/unassigned user sees only an awaiting-access message, and that database security advisors show no exposed anonymous privileged functions.
