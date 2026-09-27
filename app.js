@@ -159,13 +159,35 @@ function render() {
   }
   const o = overview(state.plan, state.guidelines, state.purchases);
   const expenses = state.purchases;
-  const sum = '<section class="summary"><p class="eyebrow">Available this month</p><div class="balance '+(o.remaining < 0?'negative':'')+'">'+formatUsd(o.remaining)+'</div><div class="summary-grid"><div><small>Starting balance</small><strong>'+formatUsd(o.starting)+'</strong></div><div><small>Purchases recorded</small><strong>−'+formatUsd(o.spent)+'</strong></div></div></section>';
-  const rows = o.categories.map(c => '<tr><td><div class="name"><span class="dot"></span><span>'+clean(c.category)+'</span><button class="quiet mini" data-action="edit-category" data-id="'+clean(c.id)+'" aria-label="Edit '+clean(c.category)+' guideline">Edit</button></div></td><td>'+formatUsd(c.target_cents)+'</td><td>'+formatUsd(c.spent)+'</td><td class="'+(c.remaining < 0?'negative':'')+'">'+formatUsd(c.remaining)+'</td></tr>').join("");
-  const goals = '<section class="card"><div class="card-header"><div><h2>Spending guidelines</h2><p class="muted">These can go negative. Nothing needs to be moved between categories.</p></div><button class="mini" data-action="new-category">+ Category</button></div>'+
-    '<div style="overflow-x:auto"><table class="guidelines"><thead><tr><th>Category</th><th>Target</th><th>Spent</th><th>Left</th></tr></thead><tbody>'+
-    (rows || '<tr><td colspan="4" class="empty">Add your first category.</td></tr>')+'</tbody></table></div>'+
-    '<div class="guideline-actions"><button class="quiet mini" data-action="manage-categories">Edit guidelines</button></div>'+
-    (state.editingCategory || state.editingCategory === "new" ? categoryForm() : "")+'</section>';
+  const totalHasBudget = o.starting > 0;
+  const totalBarWidth = totalHasBudget ? Math.max(0, Math.min(100, o.percent)) : 0;
+  const totalOver = totalHasBudget && o.remaining < 0;
+  const totalStatus = totalHasBudget ? o.percent+'% of starting balance used' : 'No positive starting balance';
+  const totalProgress = '<div class="total-progress"><div class="total-progress-label"><span>Overall spending progress</span><strong>'+clean(totalStatus)+'</strong></div>'+
+    '<div class="progress-track overall'+(totalOver?' is-over':'')+'" '+(totalHasBudget?
+      'role="progressbar" aria-label="Overall monthly spending" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+totalBarWidth+'" aria-valuetext="'+clean(totalStatus)+'"':
+      'aria-hidden="true"')+'><div class="progress-fill" style="width:'+totalBarWidth+'%"></div></div></div>';
+  const sum = '<section class="summary"><p class="eyebrow">Available this month</p><div class="balance '+(o.remaining < 0?'negative':'')+'">'+formatUsd(o.remaining)+'</div><div class="summary-grid"><div><small>Starting balance</small><strong>'+formatUsd(o.starting)+'</strong></div><div><small>Purchases recorded</small><strong>−'+formatUsd(o.spent)+'</strong></div></div>'+totalProgress+'</section>';
+  const rows = o.categories.map(c => {
+    const hasTarget = Number(c.target_cents) > 0;
+    const ratio = hasTarget ? c.percent : null;
+    const width = hasTarget ? Math.max(0, Math.min(100, ratio)) : 0;
+    const over = hasTarget && c.remaining < 0;
+    const tone = over ? 'is-over' : hasTarget && ratio >= 80 ? 'is-near' : 'is-good';
+    const detail = hasTarget
+      ? formatUsd(c.spent)+' spent of '+formatUsd(c.target_cents)
+      : formatUsd(c.spent)+' spent · No target set';
+    const status = !hasTarget ? 'No target' : over ? formatUsd(-c.remaining)+' over' : formatUsd(c.remaining)+' left';
+    const statusText = hasTarget ? ratio+'% used' : 'Set target in Settings';
+    return '<div class="category-progress '+tone+'"><div class="category-progress-heading"><h3>'+clean(c.category)+'</h3><strong class="category-status '+(over?'negative':'')+'">'+clean(status)+'</strong></div>'+
+      '<div class="category-progress-metrics"><span>'+clean(detail)+'</span><strong>'+clean(statusText)+'</strong></div>'+
+      '<div class="progress-track" '+(hasTarget?
+        'role="progressbar" aria-label="'+clean(c.category)+' spending" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+width+'" aria-valuetext="'+clean(ratio+'% of the category target used')+'"':
+        'aria-hidden="true"')+'><div class="progress-fill" style="width:'+width+'%"></div></div></div>';
+  }).join("");
+  const goals = '<section class="card"><div class="card-header"><div><h2>Spending progress</h2><p class="muted">Actual purchases against your monthly guidelines. Exceeding a target does not alter other categories.</p></div></div>'+
+    '<div class="category-progress-list">'+(rows||'<div class="empty">No categories yet. Open Settings to add spending guidelines.</div>')+'</div>'+
+    (o.categories.some(c=>Number(c.target_cents)===0)?'<p class="muted progress-help">Categories with a $0 target show spending but no progress percentage. Set their guidelines in Settings.</p>':'')+'</section>';
   const items = expenses.map(p => {
     const cat = state.guidelines.find(g=>g.id===p.guideline_id)?.category ?? "Category";
     const native = p.currency === "EUR" ? " · €"+moneyInput(p.original_amount_cents) : "";
@@ -185,7 +207,10 @@ function render() {
     (composerOpen?'Close':'＋ Add expense')+'</button></div>'+
     (composerOpen?'<div id="quick-expense-entry">'+expenseForm()+'</div>':'')+undoNotice+'</section>';
   const controls='<div class="row spread" style="margin-bottom:14px"><span class="muted" id="live-update-note">'+clean(state.feedback)+'</span><div class="row"><button class="quiet mini" data-action="refresh">↻ Refresh</button><button class="mini" data-action="budget-defaults">Budget defaults</button><button class="mini" data-action="settings">'+(state.settings?'Close settings':'Settings')+'</button></div></div>';
-  $("#app").innerHTML=intro+sum+composer+controls+(state.settings?'<div class="card" style="margin-bottom:20px"><h2>Monthly settings</h2><p class="muted">Only the total automatic obligations belong here. No savings field. These values belong to the selected month.</p>'+monthForm()+'<div class="row" style="margin-top:12px"><button class="mini" data-action="prefill-month-defaults">Load current household defaults into these fields</button></div></div>':'')+
+  $("#app").innerHTML=intro+sum+composer+controls+(state.settings?'<div class="card" style="margin-bottom:20px"><h2>Monthly settings</h2><p class="muted">Only the total automatic obligations belong here. No savings field. These values belong to the selected month.</p>'+monthForm()+'<div class="row" style="margin-top:12px"><button class="mini" data-action="prefill-month-defaults">Load current household defaults into these fields</button></div>'+
+    '<div class="settings-categories"><div class="sec-head"><h2>Category guidelines</h2><button class="mini" data-action="new-category">+ Category</button></div><p class="muted">Adjust the targets here; the everyday dashboard shows progress only.</p>'+
+    state.guidelines.map(c=>'<div class="settings-category-row"><div><strong>'+clean(c.category)+'</strong><span>'+formatUsd(c.target_cents)+' target</span></div><button class="mini" data-action="edit-category" data-id="'+clean(c.id)+'">Edit</button></div>').join('')+
+    (state.editingCategory ? categoryForm() : '')+'</div></div>':'')+
     '<div class="two-col"><div class="stack">'+goals+'</div><div class="stack">'+recent+'</div></div>';
 }
 function renderBudgetDefaults() {
@@ -472,12 +497,12 @@ async function handleAction(button) {
   if(action==="refresh"){state.error="";state.feedback="";await loadMonth();return;}
   if(action==="budget-defaults"){state.budgetDefaultsPage=!state.budgetDefaultsPage;state.accountSettings=false;render();return;}
   if(action==="account-settings"){state.accountSettings=!state.accountSettings;state.budgetDefaultsPage=false;render();return;}
-  if(action==="settings"){state.settings=!state.settings;render();return;}
+  if(action==="settings"){state.settings=!state.settings;if(!state.settings)state.editingCategory=null;render();return;}
   if(action==="prefill-month-defaults"){const form=$("#month-form");if(!form||!state.householdDefaults)throw new Error("No saved defaults found.");form.elements.net.value=moneyInput(state.householdDefaults.net_income_cents);form.elements.rate.value=state.householdDefaults.euro_to_usd;form.elements.fixed.value=moneyInput(totalFixedObligations(state.obligations,state.householdDefaults.euro_to_usd));toast("Household defaults loaded. Press Save settings to apply them to this month.");return;}
   if(action==="delete-bill"){await deleteBill(id);return;}
-  if(action==="new-category"){state.editingCategory="new";render();return;}
+  if(action==="new-category"){state.settings=true;state.editingCategory="new";render();return;}
   if(action==="manage-categories"){state.editingCategory=state.guidelines[0]?.id ?? "new";render();return;}
-  if(action==="edit-category"){state.editingCategory=id;render();return;}
+  if(action==="edit-category"){state.settings=true;state.editingCategory=id;render();return;}
   if(action==="toggle-expense"){
     const wasOpen=state.expenseComposerOpen || Boolean(state.editingExpense);
     state.expenseComposerOpen=!wasOpen;
