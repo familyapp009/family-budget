@@ -13,7 +13,7 @@ const state = {
   month: monthNow(), client: null, user: null, member: null, plan: null,
   previous: null, previousGuidelines: [], guidelines: [], purchases: [],
   editingExpense: null, editingCategory: null, settings: false,
-  loading: true, error: "", feedback: "", channel: null
+  loading: true, error: "", feedback: "", channel: null, accountSettings: false
 };
 const demoMonths = new Map();
 let toastTimer;
@@ -34,7 +34,7 @@ function header() {
   if (state.demo) {
     controls.innerHTML = '<span class="pill demo">Sample data</span><a class="button" href="./">Sign in</a>';
   } else if (state.user) {
-    controls.innerHTML = '<button class="quiet mini" data-action="signout">Sign out</button>';
+    controls.innerHTML = '<button class="quiet mini" data-action="account-settings">Account settings</button><button class="quiet mini" data-action="signout">Sign out</button>';
   } else controls.innerHTML = '<a class="button" href="./?demo=1">View sample demo</a>';
 }
 function demoSeed() {
@@ -139,6 +139,11 @@ function render() {
   }
   if (!state.demo && !state.user) { renderAuth(); return; }
   if (!state.demo && !state.member) { renderPending(); return; }
+  if (state.accountSettings) {
+    $("#app").innerHTML = '<div class="page-head"><div><p class="eyebrow">Family Budget</p><h1>Account settings</h1><p class="muted">Your personal login, available before or after setting up a monthly budget.</p></div><button data-action="account-settings">Back to budget</button></div>'+
+      '<section class="card" style="max-width:570px"><h2>Your login</h2><p class="muted">'+clean(state.user?.email ?? "")+'</p><h3>Set or change password</h3>'+passwordForm()+'</section>';
+    return;
+  }
   const intro = '<div class="page-head"><div><p class="eyebrow">Household spending</p><h1>'+clean(monthLabel(state.month))+
     '</h1><p class="muted">One balance. Flexible guidelines. No savings calculations.</p></div>'+monthPicker()+'</div>';
   if (!state.plan) {
@@ -162,7 +167,7 @@ function render() {
   const recent = '<section class="card"><div class="card-header"><div><h2>Purchases</h2><p class="muted">Shared across both phones.</p></div><button class="mini" data-action="export">Export CSV</button></div><div class="transactions">'+(items||'<div class="empty">No purchases recorded this month.</div>')+'</div></section>';
   const form = '<section class="card"><div class="card-header"><div><h2>'+(state.editingExpense?'Edit purchase':'Add a purchase')+'</h2><p class="muted">Enter only the purchases you actively make.</p></div></div>'+expenseForm()+'</section>';
   const controls='<div class="row spread" style="margin-bottom:14px"><span class="muted" id="live-update-note">'+clean(state.feedback)+'</span><div class="row"><button class="quiet mini" data-action="refresh">↻ Refresh</button><button class="mini" data-action="settings">'+(state.settings?'Close settings':'Settings')+'</button></div></div>';
-  $("#app").innerHTML=intro+sum+controls+(state.settings?'<div class="card" style="margin-bottom:20px"><h2>Monthly settings</h2><p class="muted">Only the total automatic obligations belong here. No savings field.</p>'+monthForm()+'<hr style="border:0;border-top:1px solid #edf1eb;margin:22px 0"><h3>Account password</h3>'+passwordForm()+'</div>':'')+
+  $("#app").innerHTML=intro+sum+controls+(state.settings?'<div class="card" style="margin-bottom:20px"><h2>Monthly settings</h2><p class="muted">Only the total automatic obligations belong here. No savings field.</p>'+monthForm()+'</div>':'')+
     '<div class="two-col"><div class="stack">'+goals+recent+'</div><div class="stack">'+form+'</div></div>';
 }
 function renderAuth() {
@@ -326,6 +331,7 @@ async function handleAction(button) {
     render();return;
   }
   if(action==="refresh"){state.error="";state.feedback="";await loadMonth();return;}
+  if(action==="account-settings"){state.accountSettings=!state.accountSettings;render();return;}
   if(action==="settings"){state.settings=!state.settings;render();return;}
   if(action==="new-category"){state.editingCategory="new";render();return;}
   if(action==="manage-categories"){state.editingCategory=state.guidelines[0]?.id ?? "new";render();return;}
