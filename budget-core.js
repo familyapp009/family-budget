@@ -44,3 +44,15 @@ export function sameMonth(isoDate, month) {
     !Number.isNaN(new Date(isoDate + "T12:00:00Z").valueOf()) &&
     new Date(isoDate + "T12:00:00Z").toISOString().slice(0,10) === isoDate;
 }
+
+export function totalFixedObligations(items, euroToUsd) {
+  if (!(Number(euroToUsd) > 0 && Number(euroToUsd) < 10)) throw new Error("Invalid exchange rate.");
+  return items.reduce((sum, item) => {
+    if (!item.enabled) return sum;
+    const amount = Number(item.original_amount_cents);
+    if (!Number.isSafeInteger(amount) || amount < 0) throw new Error("Invalid fixed obligation.");
+    if (item.currency === "USD") return sum + amount;
+    if (item.currency === "EUR") return sum + Math.round(amount * Number(euroToUsd));
+    throw new Error("Unsupported fixed obligation currency.");
+  }, 0);
+}
