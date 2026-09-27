@@ -108,7 +108,7 @@ async function loadMonth() {
       db.from("monthly_plans").select("*").eq("household_id",household_id).eq("month",month).maybeSingle(),
       db.from("monthly_guidelines").select("*").eq("household_id",household_id).eq("month",month).order("display_order").order("category"),
       db.from("purchases").select("*").eq("household_id",household_id).eq("month",month).order("spent_on",{ascending:false}).order("created_at",{ascending:false}),
-      db.from("monthly_plans").select("*").eq("household_id",household_id).eq("month",shiftMonth(month,-1)).maybeSingle(),
+      db.from("monthly_plans").select("*").eq("household_id",household_id).lt("month",month).order("month",{ascending:false}).limit(1).maybeSingle(),
       db.from("household_budget_defaults").select("*").eq("household_id",household_id).maybeSingle(),
       db.from("fixed_obligation_defaults").select("*").eq("household_id",household_id).order("display_order").order("label")
     ]);
@@ -122,7 +122,7 @@ async function loadMonth() {
     state.previousGuidelines = [];
     if (!state.plan && state.previous) {
       const prev = await db.from("monthly_guidelines").select("*").eq("household_id",household_id)
-        .eq("month",shiftMonth(month,-1)).order("display_order");
+        .eq("month",state.previous.month).order("display_order");
       state.previousGuidelines = assertDb(prev) ?? [];
     }
     state.error = "";
@@ -326,7 +326,7 @@ function monthForm() {
   return '<form id="month-form"><div class="fields"><label>Two-paycheck net income (USD)<input type="number" min="0" max="999999999" step=".01" name="net" required placeholder="0.00" value="'+clean(income)+'"></label>'+
     '<label>Automatic monthly obligations (USD)<input type="number" min="0" max="999999999" step=".01" name="fixed" required placeholder="0.00" value="'+clean(fixed)+'"></label></div>'+
     '<label>EUR → USD planning rate<input name="rate" type="number" step="0.000001" min="0.000001" max="9.999999" required value="'+clean(rate)+'"><span class="helper">Used for new EUR purchase entries. Existing transactions keep their recorded USD equivalent.</span></label>'+
-    (fromPrevious?'<div class="notice">Income and fixed costs use the saved household defaults. Category guidelines are copied from the previous month.</div>':'')+
+    (fromPrevious?'<div class="notice">Income and fixed costs use the saved household defaults. Category guidelines are copied from your most recent saved earlier month.</div>':'')+
     '<div class="row"><button class="primary" type="submit">'+(state.plan?"Save settings":"Create month")+'</button>'+(state.plan?'<button type="button" data-action="settings">Cancel</button>':'')+'</div></form>';
 }
 function categoryForm() {
