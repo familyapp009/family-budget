@@ -145,6 +145,7 @@ function render() {
   }
   if (!state.demo && !state.user) { renderAuth(); return; }
   if (!state.demo && !state.member) { renderPending(); return; }
+  if (state.budgetDefaultsPage) { renderBudgetDefaults(); return; }
   if (state.accountSettings) {
     $("#app").innerHTML = '<div class="page-head"><div><p class="eyebrow">Family Budget</p><h1>Account settings</h1><p class="muted">Your personal login, available before or after setting up a monthly budget.</p></div><button data-action="account-settings">Back to budget</button></div>'+
       '<section class="card" style="max-width:570px"><h2>Your login</h2><p class="muted">'+clean(state.user?.email ?? "")+'</p><h3>Set or change password</h3>'+passwordForm()+'</section>';
@@ -153,7 +154,7 @@ function render() {
   const intro = '<div class="page-head"><div><p class="eyebrow">Household spending</p><h1>'+clean(monthLabel(state.month))+
     '</h1><p class="muted">One balance. Flexible guidelines. No savings calculations.</p></div>'+monthPicker()+'</div>';
   if (!state.plan) {
-    $("#app").innerHTML=intro+'<div class="row spread" style="margin-bottom:14px"><button class="mini" data-action="account-settings">Account settings / Set password</button></div><div class="card"><h2>Set up this month</h2><p class="muted">Confirm the normal two-paycheck income and total automatic obligations. They will stay out of the main dashboard.</p>'+monthForm()+'</div>';
+    $("#app").innerHTML=intro+'<div class="row spread" style="margin-bottom:14px"><button class="mini" data-action="budget-defaults">Edit recurring defaults</button><button class="quiet mini" data-action="account-settings">Account settings / Set password</button></div><div class="card"><h2>Set up this month</h2><p class="muted">Confirm the normal two-paycheck income and total automatic obligations. They will stay out of the main dashboard.</p>'+monthForm()+'</div>';
     return;
   }
   const o = overview(state.plan, state.guidelines, state.purchases);
@@ -172,7 +173,7 @@ function render() {
   }).join("");
   const recent = '<section class="card"><div class="card-header"><div><h2>Purchases</h2><p class="muted">Shared across both phones.</p></div><button class="mini" data-action="export">Export CSV</button></div><div class="transactions">'+(items||'<div class="empty">No purchases recorded this month.</div>')+'</div></section>';
   const form = '<section class="card"><div class="card-header"><div><h2>'+(state.editingExpense?'Edit purchase':'Add a purchase')+'</h2><p class="muted">Enter only the purchases you actively make.</p></div></div>'+expenseForm()+'</section>';
-  const controls='<div class="row spread" style="margin-bottom:14px"><span class="muted" id="live-update-note">'+clean(state.feedback)+'</span><div class="row"><button class="quiet mini" data-action="refresh">↻ Refresh</button><button class="mini" data-action="settings">'+(state.settings?'Close settings':'Settings')+'</button></div></div>';
+  const controls='<div class="row spread" style="margin-bottom:14px"><span class="muted" id="live-update-note">'+clean(state.feedback)+'</span><div class="row"><button class="quiet mini" data-action="refresh">↻ Refresh</button><button class="mini" data-action="budget-defaults">Budget defaults</button><button class="mini" data-action="settings">'+(state.settings?'Close settings':'Settings')+'</button></div></div>';
   $("#app").innerHTML=intro+sum+controls+(state.settings?'<div class="card" style="margin-bottom:20px"><h2>Monthly settings</h2><p class="muted">Only the total automatic obligations belong here. No savings field.</p>'+monthForm()+'</div>':'')+
     '<div class="two-col"><div class="stack">'+goals+recent+'</div><div class="stack">'+form+'</div></div>';
 }
@@ -339,8 +340,11 @@ async function handleAction(button) {
     render();return;
   }
   if(action==="refresh"){state.error="";state.feedback="";await loadMonth();return;}
-  if(action==="account-settings"){state.accountSettings=!state.accountSettings;render();return;}
+  if(action==="budget-defaults"){state.budgetDefaultsPage=!state.budgetDefaultsPage;state.accountSettings=false;render();return;}
+  if(action==="account-settings"){state.accountSettings=!state.accountSettings;state.budgetDefaultsPage=false;render();return;}
   if(action==="settings"){state.settings=!state.settings;render();return;}
+  if(action==="prefill-month-defaults"){const form=$("#month-form");if(!form||!state.householdDefaults)throw new Error("No saved defaults found.");form.elements.net.value=moneyInput(state.householdDefaults.net_income_cents);form.elements.rate.value=state.householdDefaults.euro_to_usd;form.elements.fixed.value=moneyInput(totalFixedObligations(state.obligations,state.householdDefaults.euro_to_usd));toast("Household defaults loaded. Press Save settings to apply them to this month.");return;}
+  if(action==="delete-bill"){await deleteBill(id);return;}
   if(action==="new-category"){state.editingCategory="new";render();return;}
   if(action==="manage-categories"){state.editingCategory=state.guidelines[0]?.id ?? "new";render();return;}
   if(action==="edit-category"){state.editingCategory=id;render();return;}
@@ -381,6 +385,7 @@ document.addEventListener("submit",async event=>{
         if(error)throw error;
       }
     } else if(form.id==="month-form") await saveMonth(form);
+    else if(form.id==="defaults-form") await saveBudgetDefaults(form);
     else if(form.id==="category-form") await saveCategory(form);
     else if(form.id==="purchase-form") await savePurchase(form);
     else if(form.id==="password-form"){
