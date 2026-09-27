@@ -387,7 +387,7 @@ async function startup() {
     if(!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) throw new Error("The application is not connected to the database yet. Contact the project administrator.");
     const {createClient}=await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/+esm");
     state.client=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{
-      auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,flowType:"pkce"}
+      auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,flowType:"implicit"}
     });
     const {data,error}=await state.client.auth.getSession();
     if(error)throw error;
