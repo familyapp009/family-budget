@@ -44,3 +44,9 @@ textarea{min-height:66px;resize:vertical}.row{display:flex;gap:9px;flex-wrap:wra
 .loading{padding:35px;text-align:center;color:#748478}
 @media(max-width:760px){.shell{padding:0 15px}.site-header{padding:15px 0}.main{padding:20px 0 30px}.brand strong{font-size:17px}.brand span:not(.brand-symbol){font-size:10px}.two-col{grid-template-columns:1fr}.card{padding:16px}.summary{padding:22px 20px}.guidelines td,.guidelines th{padding-left:3px;padding-right:3px}.transaction-end button{padding:6px}.page-head{align-items:flex-start}.month-control{width:100%;justify-content:space-between}.month-control input{flex:1;text-align:center;width:140px}.summary-grid strong{font-size:19px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
+
+.bill-editor{display:grid;gap:12px;margin-top:13px}
+.bill-item{display:grid;gap:11px;padding:14px;background:#fafcf8;border:1px solid #e1e9df;border-radius:13px}
+.bill-item .row strong{font-size:13px;color:#415d4c}
+.checkline{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:650;cursor:pointer}
+.checkline input[type="checkbox"]{width:19px;height:19px;min-height:0;margin:0;flex:none;accent-color:#215742}
