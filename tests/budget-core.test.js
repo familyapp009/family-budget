@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {parseAmount, usdCents, shiftMonth, overview, sameMonth} from "../budget-core.js";
+import {parseAmount, usdCents, shiftMonth, overview, sameMonth, totalFixedObligations} from "../budget-core.js";
 test("currency and invalid amounts", () => {
   assert.equal(parseAmount("75"), 7500);
   assert.equal(parseAmount("75.05"), 7505);
@@ -25,4 +25,16 @@ test("guidelines can go negative and do not alter overall remaining", () => {
   assert.equal(result.remaining,485000);
   assert.equal(result.categories[0].remaining,-3000);
   assert.equal(result.categories[1].remaining,3000);
+});
+
+test("recurring defaults respect currencies and disabled obligations", () => {
+  const obligations = [
+    {original_amount_cents:10000,currency:"EUR",enabled:true},
+    {original_amount_cents:8000,currency:"USD",enabled:true},
+    {original_amount_cents:99999,currency:"USD",enabled:false}
+  ];
+  assert.equal(totalFixedObligations(obligations,1.14),19400);
+  assert.equal(totalFixedObligations(obligations,1.2),20000);
+  assert.equal(totalFixedObligations([],1.14),0);
+  assert.throws(()=>totalFixedObligations(obligations,0));
 });
