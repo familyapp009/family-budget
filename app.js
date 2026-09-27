@@ -12,7 +12,7 @@ const state = {
   demo: new URLSearchParams(location.search).get("demo") === "1",
   month: monthNow(), client: null, user: null, member: null, plan: null,
   previous: null, previousGuidelines: [], guidelines: [], purchases: [], householdDefaults: null, obligations: [], budgetDefaultsPage: new URLSearchParams(location.search).has("defaults"),
-  editingExpense: null, editingCategory: null, expenseComposerOpen: false, settings: false,
+  editingExpense: null, editingCategory: null, expenseComposerOpen: false, lastAdded: null, settings: false,
   loading: true, error: "", feedback: "", channel: null, accountSettings: new URLSearchParams(location.search).has("account")
 };
 const demoMonths = new Map();
@@ -173,11 +173,17 @@ function render() {
   }).join("");
   const recent = '<section class="card"><div class="card-header"><div><h2>Purchases</h2><p class="muted">Shared across both phones.</p></div><button class="mini" data-action="export">Export CSV</button></div><div class="transactions">'+(items||'<div class="empty">No purchases recorded this month.</div>')+'</div></section>';
   const composerOpen = state.expenseComposerOpen || Boolean(state.editingExpense);
+  const recentAdd = state.lastAdded?.month === state.month ? expenses.find(p=>p.id===state.lastAdded.id) : null;
+  const undoNotice = recentAdd ? '<div class="last-added" role="status"><div><strong>Purchase added</strong><span>'+
+    clean(state.guidelines.find(g=>g.id===recentAdd.guideline_id)?.category ?? "Purchase")+
+    ' · '+formatUsd(recentAdd.usd_cents)+'</span></div><div class="last-added-actions">'+
+    '<button type="button" class="mini" data-action="edit-expense" data-id="'+clean(recentAdd.id)+'">Edit</button>'+
+    '<button type="button" class="mini undo" data-action="undo-last-add">Undo</button></div></div>' : '';
   const composer = '<section class="card quick-expense '+(composerOpen?'is-open':'')+'" id="quick-expense">'+
     '<div class="card-header"><div><h2>Quick expense</h2><p class="muted">Record a purchase as you make it.</p></div>'+
     '<button class="primary quick-expense-toggle" type="button" data-action="toggle-expense" aria-expanded="'+composerOpen+'" aria-controls="quick-expense-entry">'+
     (composerOpen?'Close':'＋ Add expense')+'</button></div>'+
-    (composerOpen?'<div id="quick-expense-entry">'+expenseForm()+'</div>':'')+'</section>';
+    (composerOpen?'<div id="quick-expense-entry">'+expenseForm()+'</div>':'')+undoNotice+'</section>';
   const controls='<div class="row spread" style="margin-bottom:14px"><span class="muted" id="live-update-note">'+clean(state.feedback)+'</span><div class="row"><button class="quiet mini" data-action="refresh">↻ Refresh</button><button class="mini" data-action="budget-defaults">Budget defaults</button><button class="mini" data-action="settings">'+(state.settings?'Close settings':'Settings')+'</button></div></div>';
   $("#app").innerHTML=intro+sum+composer+controls+(state.settings?'<div class="card" style="margin-bottom:20px"><h2>Monthly settings</h2><p class="muted">Only the total automatic obligations belong here. No savings field. These values belong to the selected month.</p>'+monthForm()+'<div class="row" style="margin-top:12px"><button class="mini" data-action="prefill-month-defaults">Load current household defaults into these fields</button></div></div>':'')+
     '<div class="two-col"><div class="stack">'+goals+'</div><div class="stack">'+recent+'</div></div>';
@@ -380,21 +386,47 @@ async function savePurchase(form) {
   if (note.length>280) throw new Error("Notes can be up to 280 characters.");
   const values={original_amount_cents,currency,guideline_id,spent_on,note};
   const existing=state.purchases.find(p=>p.id===state.editingExpense);
+  let insertedId = null;
   if (state.demo) {
     const d=demoMonths.get(state.month),usd_cents=usdCents(original_amount_cents,currency,d.plan.euro_to_usd);
     if (existing) Object.assign(existing,{...values,usd_cents});
-    else d.purchases.unshift({id:uid(),...values,usd_cents,household_id:"demo",month:state.month,created_at:new Date().toISOString()});
+    else {
+      insertedId=uid();
+      d.purchases.unshift({id:insertedId,...values,usd_cents,household_id:"demo",month:state.month,created_at:new Date().toISOString()});
+    }
   } else if (existing) {
     assertDb(await state.client.from("purchases").update(values).eq("id",existing.id)
       .eq("household_id",state.member.household_id).select("id").single());
   } else {
-    assertDb(await state.client.from("purchases").insert({...values,household_id:state.member.household_id,month:state.month})
+    const saved=assertDb(await state.client.from("purchases").insert({...values,household_id:state.member.household_id,month:state.month})
       .select("id").single());
+    insertedId=saved.id;
   }
+  state.lastAdded = insertedId ? {id:insertedId,month:state.month} : null;
   state.editingExpense=null;
   state.expenseComposerOpen=false;
   await loadMonth();
-  toast(existing?"Purchase updated.":"Purchase recorded.");
+  toast(existing?"Purchase updated.":"Purchase recorded. You can Edit or Undo it above.");
+}
+async function undoLastAdd() {
+  const last=state.lastAdded;
+  if(!last || last.month!==state.month) return;
+  if(state.demo) {
+    const d=demoMonths.get(last.month);
+    if(!d?.purchases.some(p=>p.id===last.id)) throw new Error("That purchase is no longer available to undo.");
+    d.purchases=d.purchases.filter(p=>p.id!==last.id);
+  } else {
+    const deleted=assertDb(await state.client.from("purchases").delete()
+      .eq("id",last.id).eq("month",last.month)
+      .eq("household_id",state.member.household_id).eq("recorded_by",state.user.id)
+      .select("id"));
+    if(deleted?.length!==1) throw new Error("Purchase already removed or no longer available to undo. Refresh to check.");
+  }
+  state.lastAdded=null;
+  state.editingExpense=null;
+  state.expenseComposerOpen=false;
+  await loadMonth();
+  toast("Last purchase undone. Your balance has been restored.");
 }
 async function deleteExpense(id) {
   if (!confirm("Delete this purchase?")) return;
@@ -402,6 +434,7 @@ async function deleteExpense(id) {
     const d=demoMonths.get(state.month);d.purchases=d.purchases.filter(p=>p.id!==id);
   } else assertDb(await state.client.from("purchases").delete().eq("id",id).eq("household_id",state.member.household_id).select("id").single());
   if(state.editingExpense===id) state.editingExpense=null;
+  if(state.lastAdded?.id===id) state.lastAdded=null;
   await loadMonth(); toast("Purchase removed.");
 }
 async function deleteCategory(id) {
@@ -426,13 +459,13 @@ async function handleAction(button) {
   const action=button.dataset.action, id=button.dataset.id;
   if (action==="prev-month" || action==="next-month") {
     state.month=shiftMonth(state.month,action==="prev-month"?-1:1);
-    state.settings=false;state.editingExpense=null;state.editingCategory=null;state.expenseComposerOpen=false;
+    state.settings=false;state.editingExpense=null;state.editingCategory=null;state.expenseComposerOpen=false;state.lastAdded=null;
     await loadMonth();return;
   }
   if (action==="signout") {
     const {error}=await state.client.auth.signOut();
     if(error) throw error;
-    state.user=null;state.member=null;state.plan=null;state.householdDefaults=null;state.obligations=[];
+    state.user=null;state.member=null;state.plan=null;state.householdDefaults=null;state.obligations=[];state.lastAdded=null;
     if(state.channel){await state.client.removeChannel(state.channel);state.channel=null;}
     render();return;
   }
@@ -455,10 +488,12 @@ async function handleAction(button) {
   }
   if(action==="close-expense"){state.expenseComposerOpen=false;state.editingExpense=null;render();return;}
   if(action==="edit-expense"){
+    state.lastAdded=null;
     state.editingExpense=id;state.expenseComposerOpen=true;render();
     $("#quick-expense")?.scrollIntoView({behavior:"smooth",block:"start"});
     return;
   }
+  if(action==="undo-last-add"){await undoLastAdd();return;}
   if(action==="delete-expense"){await deleteExpense(id);return;}
   if(action==="delete-category"){await deleteCategory(id);return;}
   if(action==="cancel-edit"){state.editingExpense=null;state.editingCategory=null;state.expenseComposerOpen=false;render();return;}
@@ -474,7 +509,7 @@ document.addEventListener("click",async event=>{
 document.addEventListener("change",async event=>{
   if(event.target.id!=="month-picker")return;
   if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value)){toast("Invalid month.");return;}
-  state.month=event.target.value;state.settings=false;state.editingExpense=null;state.editingCategory=null;
+  state.month=event.target.value;state.settings=false;state.editingExpense=null;state.editingCategory=null;state.lastAdded=null;
   await loadMonth();
 });
 document.addEventListener("submit",async event=>{
