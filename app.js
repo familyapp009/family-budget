@@ -67,7 +67,8 @@ function header() {
   const controls = $("#header-tools");
   const dark = state.theme === "dark";
   const toggle = '<button class="mini theme-toggle" type="button" data-action="toggle-theme" aria-pressed="'+dark+
-    '" aria-label="Switch to '+(dark?"light":"dark")+' mode">'+(dark?"☀ Light mode":"☾ Dark mode")+'</button>';
+    '" aria-label="Switch to '+(dark?"light":"dark")+' mode">'+(dark?"☀ Light mode":"☾ Dark mode")+'</button>'+
+    '<button class="mini header-refresh" type="button" data-action="reload-app" aria-label="Refresh app and sync budget" title="Reload app and sync">↻ Refresh</button>';
   if (state.demo) {
     controls.innerHTML = toggle+'<span class="pill demo">Sample data</span><a class="button" href="./">Sign in</a>';
   } else if (state.user) {
@@ -520,6 +521,7 @@ function exportCsv() {
 }
 async function handleAction(button) {
   const action=button.dataset.action, id=button.dataset.id;
+  if (action==="reload-app") { refreshApplication(true); return; }
   if (action==="toggle-theme") {
     const next = state.theme === "dark" ? "light" : "dark";
     themeChangeVersion++;
@@ -574,6 +576,66 @@ async function handleAction(button) {
   if(action==="cancel-edit"){state.editingExpense=null;state.editingCategory=null;state.expenseComposerOpen=false;render();return;}
   if(action==="export"){exportCsv();return;}
 }
+// Re-load the document rather than only querying the database: this also fetches
+// the current versioned JS/CSS references after a GitHub Pages deployment.
+function refreshApplication(confirmEditing = false) {
+  if (confirmEditing && document.querySelector("form") &&
+      !confirm("Reload the application? Any unsaved form changes will be lost.")) return;
+  const indicator = $("#pull-refresh");
+  if (indicator) {
+    indicator.textContent = "Refreshing…";
+    indicator.classList.add("is-refreshing");
+    indicator.classList.remove("is-ready");
+  }
+  const next = new URL(location.href);
+  next.searchParams.set("_refresh", String(Date.now()));
+  // Same-origin navigation preserves Supabase authentication in browser storage.
+  location.replace(next.href);
+}
+function installPullToRefresh() {
+  const indicator = $("#pull-refresh");
+  if (!indicator || !("ontouchstart" in window)) return;
+  const threshold=88, maximum=132;
+  let startY=0, startX=0, distance=0, tracking=false, refreshing=false;
+  const blocked = () => !!document.querySelector("form") || state.loading;
+  const reset=()=>{
+    tracking=false;distance=0;
+    indicator.classList.remove("is-pulling","is-ready");
+    indicator.style.setProperty("--pull-distance","0px");
+    indicator.textContent="↓ Pull to refresh";
+  };
+  document.addEventListener("touchstart",event=>{
+    if(refreshing || event.touches.length!==1 || window.scrollY>0 ||
+      document.scrollingElement?.scrollTop>0 || blocked()) return;
+    if(event.target.closest("button,a,input,select,textarea,[contenteditable='true']")) return;
+    startY=event.touches[0].clientY;
+    startX=event.touches[0].clientX;
+    distance=0;tracking=true;
+  },{passive:true});
+  document.addEventListener("touchmove",event=>{
+    if(!tracking || event.touches.length!==1)return;
+    if(window.scrollY>0 || document.scrollingElement?.scrollTop>0 || blocked()) {reset();return;}
+    const dy=event.touches[0].clientY-startY;
+    const dx=event.touches[0].clientX-startX;
+    if(dy<=0 || Math.abs(dx)>Math.max(16,dy*0.8)) {reset();return;}
+    if(dy<7)return;
+    // Intercept downward overscroll only. Normal upward/horizontal navigation remains native.
+    if(event.cancelable)event.preventDefault();
+    distance=Math.min(maximum,dy*0.6);
+    const ready=distance>=threshold;
+    indicator.style.setProperty("--pull-distance",distance+"px");
+    indicator.classList.add("is-pulling");
+    indicator.classList.toggle("is-ready",ready);
+    indicator.textContent=ready?"↑ Release to refresh":"↓ Pull to refresh";
+  },{passive:false});
+  document.addEventListener("touchend",()=>{
+    if(!tracking)return;
+    const ready=distance>=threshold && !blocked();
+    reset();
+    if(ready){refreshing=true;refreshApplication(false);}
+  },{passive:true});
+  document.addEventListener("touchcancel",reset,{passive:true});
+}
 document.addEventListener("click",async event=>{
   const button=event.target.closest("button[data-action]");
   if(!button)return;
@@ -623,6 +685,7 @@ document.addEventListener("change",event=>{if(event.target.closest("#defaults-fo
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&!state.loading&&state.user&&state.member)void loadMonth();});
 
 async function startup() {
+  installPullToRefresh();
   if(state.demo){selectThemeForAccount();demoSeed();loadDemo();return;}
   try {
     if(!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) throw new Error("The application is not connected to the database yet. Contact the project administrator.");
