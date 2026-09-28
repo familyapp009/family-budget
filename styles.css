@@ -184,3 +184,22 @@ textarea{min-height:66px;resize:vertical}.row{display:flex;gap:9px;flex-wrap:wra
 :root[data-theme="dark"] .last-added-actions .undo:hover{background:#428a5e}
 :root[data-theme="dark"] .total-progress-label{color:#c6decf}
 :root[data-theme="dark"] .total-progress-label strong{color:#fff}
+
+/* iOS Home Screen pull-to-refresh: only engages on downward movement from the top. */
+html,body{overscroll-behavior-y:contain}
+.pull-refresh{
+  --pull-distance:0px;
+  position:fixed;top:calc(env(safe-area-inset-top, 0px) + 5px);left:50%;
+  z-index:30;pointer-events:none;white-space:nowrap;
+  padding:9px 16px;border-radius:99px;background:#1c513b;color:#f4fff6;
+  border:1px solid #518263;box-shadow:0 5px 20px #0002;
+  font-size:12px;font-weight:750;
+  opacity:0;transform:translate(-50%,calc(-135% + var(--pull-distance)));
+  transition:opacity .12s ease,transform .15s ease;
+}
+.pull-refresh.is-pulling,.pull-refresh.is-refreshing{opacity:1}
+.pull-refresh.is-ready{background:#286d46;border-color:#5e9b72}
+.pull-refresh.is-refreshing{--pull-distance:90px}
+:root[data-theme="dark"] .pull-refresh{background:#365c44;border-color:#81a98a;color:#f5fff6;box-shadow:0 5px 20px #0008}
+:root[data-theme="dark"] .pull-refresh.is-ready{background:#44815a}
+@media(max-width:670px){.header-refresh{min-height:36px}}
