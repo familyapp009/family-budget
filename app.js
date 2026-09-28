@@ -13,7 +13,7 @@ const state = {
   month: monthNow(), client: null, user: null, member: null, plan: null,
   previous: null, previousGuidelines: [], guidelines: [], purchases: [], householdDefaults: null, obligations: [], budgetDefaultsPage: new URLSearchParams(location.search).has("defaults"),
   editingExpense: null, editingCategory: null, expenseComposerOpen: false, lastAdded: null, settings: false,
-  loading: true, error: "", feedback: "", channel: null, theme: "light", themeAccount: null, accountSettings: new URLSearchParams(location.search).has("account")
+  loading: true, error: "", feedback: "", channel: null, theme: "light", themeAccount: undefined, accountSettings: new URLSearchParams(location.search).has("account")
 };
 const demoMonths = new Map();
 let toastTimer;
