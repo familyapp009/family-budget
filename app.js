@@ -584,6 +584,7 @@ function refreshApplication(confirmEditing = false) {
   const indicator = $("#pull-refresh");
   if (indicator) {
     indicator.textContent = "Refreshing…";
+    indicator.style.setProperty("--pull-distance","90px");
     indicator.classList.add("is-refreshing");
     indicator.classList.remove("is-ready");
   }
