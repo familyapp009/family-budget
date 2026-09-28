@@ -101,3 +101,86 @@ textarea{min-height:66px;resize:vertical}.row{display:flex;gap:9px;flex-wrap:wra
 .settings-category-row strong{font-size:13px}
 .settings-category-row span{font-size:11px;color:#718378;margin-top:4px;font-variant-numeric:tabular-nums}
 @media(max-width:420px){.category-progress-metrics{flex-wrap:wrap;row-gap:4px}.category-progress-heading h3{font-size:14px}}
+
+/* Account-scoped dark mode. All original light-mode colors remain the default. */
+:root{color-scheme:light}
+.theme-toggle{white-space:nowrap;min-height:36px;font-variant-numeric:tabular-nums}
+@media(max-width:670px){
+  .site-header{flex-wrap:wrap;gap:9px}
+  .header-tools{width:100%;justify-content:flex-end;gap:5px;flex-wrap:wrap}
+  .header-tools .mini{font-size:11px;padding:8px 10px}
+}
+:root[data-theme="dark"]{color-scheme:dark;color:#e5eee7;background:#101a17}
+:root[data-theme="dark"] .site-header{border-bottom-color:#33483c}
+:root[data-theme="dark"] .brand-symbol{color:#f4fff5;background:#367351}
+:root[data-theme="dark"] .brand span:not(.brand-symbol){color:#adbeaf}
+:root[data-theme="dark"] footer{color:#a2b1a6}
+:root[data-theme="dark"] a{color:#91d2a6}
+:root[data-theme="dark"] button,
+:root[data-theme="dark"] .button{background:#23382e;color:#e0f0e5;border-color:#46624d}
+:root[data-theme="dark"] button:hover,
+:root[data-theme="dark"] .button:hover{background:#324b3b}
+:root[data-theme="dark"] button.primary{color:#f5fff6;background:#297047;border-color:#428d61}
+:root[data-theme="dark"] button.primary:hover{background:#36865a}
+:root[data-theme="dark"] button.quiet{background:transparent;border-color:transparent;color:#bfd9c5}
+:root[data-theme="dark"] button.quiet:hover{background:#243a2f}
+:root[data-theme="dark"] button.danger{background:#442927;border-color:#87544a;color:#ffd0c5}
+:root[data-theme="dark"] .theme-toggle{background:#2b5139;border-color:#548966;color:#d9f4de}
+:root[data-theme="dark"] .muted,
+:root[data-theme="dark"] .subtle{color:#a7b9ac}
+:root[data-theme="dark"] .eyebrow{color:#a7ccb2}
+:root[data-theme="dark"] .month-control{background:#1d2c24;border-color:#405448}
+:root[data-theme="dark"] .month-control input{color:#e5eee7}
+:root[data-theme="dark"] .summary{background:#1d4837;box-shadow:0 12px 30px #0005}
+:root[data-theme="dark"] .summary .eyebrow{color:#d1e9d8}
+:root[data-theme="dark"] .summary-grid small{color:#b8d7c3}
+:root[data-theme="dark"] .card{background:#1b2a22;border-color:#354d3c;box-shadow:0 5px 20px #0003}
+:root[data-theme="dark"] label{color:#c5daca}
+:root[data-theme="dark"] label span.helper{color:#a6b9aa}
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea{background:#13221a;color:#e7f0e9;border-color:#4d6553}
+:root[data-theme="dark"] input::placeholder{color:#94aa9a}
+:root[data-theme="dark"] input:focus,
+:root[data-theme="dark"] select:focus,
+:root[data-theme="dark"] textarea:focus{border-color:#83c29a;outline-color:#6aaf80}
+:root[data-theme="dark"] .guidelines th{color:#b7c8b9}
+:root[data-theme="dark"] .guidelines td,
+:root[data-theme="dark"] .transaction,
+:root[data-theme="dark"] .category-progress,
+:root[data-theme="dark"] .settings-category-row{border-top-color:#34473a}
+:root[data-theme="dark"] .guidelines .dim,
+:root[data-theme="dark"] .transaction-details span,
+:root[data-theme="dark"] .category-progress-metrics,
+:root[data-theme="dark"] .settings-category-row span{color:#a9bcab}
+:root[data-theme="dark"] .negative{color:#f4a28c!important}
+:root[data-theme="dark"] .category-progress-metrics strong{color:#c5ddc9}
+:root[data-theme="dark"] .category-progress.is-over .category-progress-metrics strong{color:#f0aa96}
+:root[data-theme="dark"] .progress-track{background:#3b503f}
+:root[data-theme="dark"] .progress-fill{background:#72b98b}
+:root[data-theme="dark"] .category-progress.is-near .progress-fill{background:#dfac63}
+:root[data-theme="dark"] .category-progress.is-over .progress-fill{background:#e98670}
+:root[data-theme="dark"] .progress-track.overall{background:#ffffff29}
+:root[data-theme="dark"] .progress-track.overall .progress-fill{background:#a0dfad}
+:root[data-theme="dark"] .progress-track.overall.is-over .progress-fill{background:#ffae94}
+:root[data-theme="dark"] .pill{background:#2c4934;color:#c0ebc8}
+:root[data-theme="dark"] .pill.demo{background:#4a3e25;color:#f5d8a2}
+:root[data-theme="dark"] .notice{background:#263e2d;border-color:#496847;color:#c9e7c9}
+:root[data-theme="dark"] .notice.warn{background:#493a21;border-color:#776039;color:#f4d6a1}
+:root[data-theme="dark"] .empty{color:#acbeae}
+:root[data-theme="dark"] .detail-list span:nth-child(odd){color:#a7bca9}
+:root[data-theme="dark"] .toast{background:#355d43;color:#f5fff6;box-shadow:0 9px 22px #0008}
+:root[data-theme="dark"] .bill-item{background:#213528;border-color:#456149}
+:root[data-theme="dark"] .bill-item .row strong{color:#d2ead8}
+:root[data-theme="dark"] .checkline input[type="checkbox"]{accent-color:#62a976}
+:root[data-theme="dark"] .quick-expense{border-color:#4c7655}
+:root[data-theme="dark"] #quick-expense-entry,
+:root[data-theme="dark"] .progress-help,
+:root[data-theme="dark"] .settings-categories{border-top-color:#344e3b}
+:root[data-theme="dark"] .last-added{background:#25452e;border-color:#4d7d55}
+:root[data-theme="dark"] .last-added strong{color:#b8eac3}
+:root[data-theme="dark"] .last-added span{color:#c2d9c6}
+:root[data-theme="dark"] .last-added-actions .undo{background:#327a4c;border-color:#65a679;color:#fff}
+:root[data-theme="dark"] .last-added-actions .undo:hover{background:#428a5e}
+:root[data-theme="dark"] .total-progress-label{color:#c6decf}
+:root[data-theme="dark"] .total-progress-label strong{color:#fff}
