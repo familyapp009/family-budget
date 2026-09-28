@@ -13,10 +13,44 @@ const state = {
   month: monthNow(), client: null, user: null, member: null, plan: null,
   previous: null, previousGuidelines: [], guidelines: [], purchases: [], householdDefaults: null, obligations: [], budgetDefaultsPage: new URLSearchParams(location.search).has("defaults"),
   editingExpense: null, editingCategory: null, expenseComposerOpen: false, lastAdded: null, settings: false,
-  loading: true, error: "", feedback: "", channel: null, accountSettings: new URLSearchParams(location.search).has("account")
+  loading: true, error: "", feedback: "", channel: null, theme: "light", themeAccount: null, accountSettings: new URLSearchParams(location.search).has("account")
 };
 const demoMonths = new Map();
 let toastTimer;
+let themeChangeVersion = 0;
+const themeKey = account => "family-budget:theme:" + (account ?? "guest");
+function readTheme(account) {
+  try {
+    const theme = localStorage.getItem(themeKey(account));
+    return theme === "dark" || theme === "light" ? theme : null;
+  } catch { return null; }
+}
+function applyTheme(theme, remember = false) {
+  state.theme = theme === "dark" ? "dark" : "light";
+  document.documentElement.dataset.theme = state.theme;
+  const themeColor = document.querySelector('meta[name="theme-color"]');
+  if (themeColor) themeColor.content = state.theme === "dark" ? "#101a17" : "#16352d";
+  if (remember) {
+    try { localStorage.setItem(themeKey(state.themeAccount), state.theme); } catch { /* Storage can be disabled. */ }
+  }
+  header();
+}
+function selectThemeForAccount() {
+  const account = state.demo ? "demo" : state.user?.id ?? null;
+  if (account === state.themeAccount) return;
+  state.themeAccount = account;
+  const local = readTheme(account);
+  applyTheme(local ?? "light");
+  if (!state.demo && account && state.client) {
+    const version = themeChangeVersion;
+    void (async () => {
+      const {data,error} = await state.client.from("user_theme_preferences")
+        .select("theme").eq("user_id",account).maybeSingle();
+      if (error || state.themeAccount !== account || themeChangeVersion !== version) return;
+      if (data?.theme === "dark" || data?.theme === "light") applyTheme(data.theme,true);
+    })();
+  }
+}
 
 function toast(message) {
   const el = $("#toast");
@@ -31,11 +65,14 @@ function assertDb({data,error}) {
 }
 function header() {
   const controls = $("#header-tools");
+  const dark = state.theme === "dark";
+  const toggle = '<button class="mini theme-toggle" type="button" data-action="toggle-theme" aria-pressed="'+dark+
+    '" aria-label="Switch to '+(dark?"light":"dark")+' mode">'+(dark?"☀ Light mode":"☾ Dark mode")+'</button>';
   if (state.demo) {
-    controls.innerHTML = '<span class="pill demo">Sample data</span><a class="button" href="./">Sign in</a>';
+    controls.innerHTML = toggle+'<span class="pill demo">Sample data</span><a class="button" href="./">Sign in</a>';
   } else if (state.user) {
-    controls.innerHTML = '<button class="quiet mini" data-action="account-settings">Account settings</button><button class="quiet mini" data-action="signout">Sign out</button>';
-  } else controls.innerHTML = '<a class="button" href="./?demo=1">View sample demo</a>';
+    controls.innerHTML = toggle+'<button class="quiet mini" data-action="account-settings">Account settings</button><button class="quiet mini" data-action="signout">Sign out</button>';
+  } else controls.innerHTML = toggle+'<a class="button" href="./?demo=1">View sample demo</a>';
 }
 function demoSeed() {
   const month = state.month;
@@ -97,6 +134,7 @@ function connectRealtime(householdId) {
   state.channel = channel.subscribe();
 }
 async function loadMonth() {
+  selectThemeForAccount();
   if (state.demo) { loadDemo(); return; }
   if (!state.user) { state.loading = false; render(); return; }
   state.loading = true; render();
@@ -482,6 +520,18 @@ function exportCsv() {
 }
 async function handleAction(button) {
   const action=button.dataset.action, id=button.dataset.id;
+  if (action==="toggle-theme") {
+    const next = state.theme === "dark" ? "light" : "dark";
+    themeChangeVersion++;
+    applyTheme(next,true);
+    if (!state.demo && state.user && state.client) {
+      const {error} = await state.client.from("user_theme_preferences").upsert({
+        user_id:state.user.id, theme:next, updated_at:new Date().toISOString()
+      },{onConflict:"user_id"});
+      if (error) toast("Theme changed on this device, but cross-device preference could not be saved.");
+    }
+    return;
+  }
   if (action==="prev-month" || action==="next-month") {
     state.month=shiftMonth(state.month,action==="prev-month"?-1:1);
     state.settings=false;state.editingExpense=null;state.editingCategory=null;state.expenseComposerOpen=false;state.lastAdded=null;
@@ -573,7 +623,7 @@ document.addEventListener("change",event=>{if(event.target.closest("#defaults-fo
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&!state.loading&&state.user&&state.member)void loadMonth();});
 
 async function startup() {
-  if(state.demo){demoSeed();loadDemo();return;}
+  if(state.demo){selectThemeForAccount();demoSeed();loadDemo();return;}
   try {
     if(!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) throw new Error("The application is not connected to the database yet. Contact the project administrator.");
     const {createClient}=await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/+esm");
