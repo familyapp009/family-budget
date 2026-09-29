@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {parseAmount, usdCents, shiftMonth, overview, sameMonth, totalFixedObligations, usagePercent} from "../budget-core.js";
+import {parseAmount, usdCents, shiftMonth, overview, sameMonth, totalFixedObligations, usagePercent, repeatPurchaseValues} from "../budget-core.js";
 test("currency and invalid amounts", () => {
   assert.equal(parseAmount("75"), 7500);
   assert.equal(parseAmount("75.05"), 7505);
@@ -64,4 +64,23 @@ test("progress reports over-budget percentage without overflowing the visual bar
   assert.equal(usagePercent(13500,10000),135);
   assert.equal(usagePercent(500,0),null);
   assert.equal(usagePercent(0,0),null);
+});
+
+test("repeat creates a new dated purchase without retaining the old ID or conversion", () => {
+  const original = {
+    id:"original-id",month:"2026-09",household_id:"household-1",guideline_id:"older-category",
+    spent_on:"2026-09-11",created_at:"2026-09-11T10:30:00Z",
+    original_amount_cents:549,currency:"EUR",usd_cents:626,note:"Lunch"
+  };
+  const repeated = repeatPurchaseValues(original,"current-category","2026-10-02","2026-10");
+  assert.deepEqual(repeated,{
+    original_amount_cents:549,currency:"EUR",guideline_id:"current-category",
+    spent_on:"2026-10-02",note:"Lunch"
+  });
+  assert.equal("id" in repeated,false);
+  assert.equal("created_at" in repeated,false);
+  assert.equal("usd_cents" in repeated,false);
+  assert.equal(original.spent_on,"2026-09-11");
+  assert.throws(()=>repeatPurchaseValues(original,"current-category","2026-09-11","2026-10"),/destination month/);
+  assert.throws(()=>repeatPurchaseValues(original,null,"2026-10-02","2026-10"),/category/);
 });
