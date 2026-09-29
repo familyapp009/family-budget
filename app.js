@@ -248,7 +248,7 @@ function render() {
     '<div class="card-header"><div><h2>Quick expense</h2><p class="muted">Record a purchase as you make it.</p></div>'+
     '<button class="primary quick-expense-toggle" type="button" data-action="toggle-expense" aria-expanded="'+composerOpen+'" aria-controls="quick-expense-entry">'+
     (composerOpen?'Close':'＋ Add expense')+'</button></div>'+
-    (composerOpen?'<div id="quick-expense-entry">'+expenseForm()+'</div>':'')+undoNotice+'</section>';
+    (composerOpen?'<div id="quick-expense-entry">'+expenseForm()+'</div>':'')+'</section>';
   const controls='<div class="row spread" style="margin-bottom:14px"><span class="muted" id="live-update-note">'+clean(state.feedback)+'</span><div class="row"><button class="quiet mini" data-action="refresh">↻ Refresh</button><button class="mini" data-action="budget-defaults">Budget defaults</button><button class="mini" data-action="settings">'+(state.settings?'Close settings':'Settings')+'</button></div></div>';
   $("#app").innerHTML=intro+sum+composer+controls+(state.settings?'<div class="card" style="margin-bottom:20px"><h2>Monthly settings</h2><p class="muted">Only the total automatic obligations belong here. No savings field. These values belong to the selected month.</p>'+monthForm()+'<div class="row" style="margin-top:12px"><button class="mini" data-action="prefill-month-defaults">Load current household defaults into these fields</button></div>'+
     '<div class="settings-categories"><div class="sec-head"><h2>Category guidelines</h2><button class="mini" data-action="new-category">+ Category</button></div><p class="muted">Adjust the targets here; the everyday dashboard shows progress only.</p>'+
@@ -569,6 +569,67 @@ function exportCsv() {
   const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
   const a=document.createElement("a");a.href=url;a.download="family-budget-"+state.month+".csv";document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
+// Swipe reveals actions; it never deletes a purchase without a separate tap and confirmation.
+function setPurchaseActions(row,open) {
+  if (open) {
+    for (const other of document.querySelectorAll(".transaction.is-open")) {
+      if (other!==row) setPurchaseActions(other,false);
+    }
+  }
+  const tray=row.querySelector(".transaction-actions");
+  const toggle=row.querySelector(".purchase-options-toggle");
+  const surface=row.querySelector(".transaction-surface");
+  if (!tray || !toggle || !surface) return;
+  row.classList.toggle("is-open",open);
+  tray.toggleAttribute("inert",!open);
+  tray.setAttribute("aria-hidden",String(!open));
+  toggle.setAttribute("aria-expanded",String(open));
+  surface.style.removeProperty("transform");
+  row.classList.remove("is-dragging");
+}
+function installPurchaseSwipe() {
+  let gesture=null;
+  document.addEventListener("touchstart",event=>{
+    const surface=event.target.closest?.(".transaction-surface");
+    if (event.touches.length!==1 || !surface || state.loading) {gesture=null;return;}
+    const row=surface.closest(".transaction"), touch=event.touches[0];
+    gesture={row,surface,x:touch.clientX,y:touch.clientY,mode:null,
+      startOpen:row.classList.contains("is-open"),width:row.querySelector(".transaction-actions")?.offsetWidth||164,
+      delta:0};
+  },{passive:true});
+  document.addEventListener("touchmove",event=>{
+    if(!gesture || event.touches.length!==1)return;
+    const touch=event.touches[0], dx=touch.clientX-gesture.x, dy=touch.clientY-gesture.y;
+    if(!gesture.mode) {
+      if(Math.abs(dy)>12 && Math.abs(dy)>=Math.abs(dx)) gesture.mode="vertical";
+      else if(Math.abs(dx)>12 && Math.abs(dx)>Math.abs(dy)*1.25) gesture.mode="horizontal";
+    }
+    if(gesture.mode!=="horizontal")return;
+    if(event.cancelable) event.preventDefault();
+    gesture.delta=dx;
+    const base=gesture.startOpen?-gesture.width:0;
+    const position=Math.max(-gesture.width,Math.min(0,base+dx));
+    gesture.row.classList.add("is-dragging");
+    gesture.surface.style.transform="translateX("+position+"px)";
+  },{passive:false});
+  document.addEventListener("touchend",()=>{
+    if(!gesture)return;
+    const g=gesture;gesture=null;
+    if(!g.row.isConnected)return;
+    g.row.classList.remove("is-dragging");
+    g.surface.style.removeProperty("transform");
+    if(g.mode!=="horizontal")return;
+    const open=g.delta< -42?true:g.delta>42?false:g.startOpen;
+    setPurchaseActions(g.row,open);
+  },{passive:true});
+  document.addEventListener("touchcancel",()=>{
+    if(gesture?.row.isConnected){
+      gesture.row.classList.remove("is-dragging");
+      gesture.surface.style.removeProperty("transform");
+    }
+    gesture=null;
+  },{passive:true});
+}
 async function handleAction(button) {
   const action=button.dataset.action, id=button.dataset.id;
   if (action==="reload-app") { refreshApplication(true); return; }
@@ -688,6 +749,9 @@ function installPullToRefresh() {
   document.addEventListener("touchcancel",reset,{passive:true});
 }
 document.addEventListener("click",async event=>{
+  if(!event.target.closest(".transaction")) {
+    for(const row of document.querySelectorAll(".transaction.is-open")) setPurchaseActions(row,false);
+  }
   const button=event.target.closest("button[data-action]");
   if(!button)return;
   event.preventDefault();button.disabled=true;
@@ -737,6 +801,7 @@ document.addEventListener("visibilitychange",()=>{if(document.visibilityState===
 
 async function startup() {
   installPullToRefresh();
+  installPurchaseSwipe();
   if(state.demo){selectThemeForAccount();demoSeed();loadDemo();return;}
   try {
     if(!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) throw new Error("The application is not connected to the database yet. Contact the project administrator.");
