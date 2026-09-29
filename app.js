@@ -791,7 +791,37 @@ document.addEventListener("submit",async event=>{
 });
 document.addEventListener("input",event=>{if(event.target.closest("#defaults-form"))updateDefaultsPreview();});
 document.addEventListener("change",event=>{if(event.target.closest("#defaults-form"))updateDefaultsPreview();});
-document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&!state.loading&&state.user&&state.member)void loadMonth();});
+// A suspended iOS web app can resume without a new navigation. Check the live
+// document version when foregrounded, and reload only if code has changed.
+let checkingForAppUpdate=false;
+async function checkForAppUpdate() {
+  if(checkingForAppUpdate || document.visibilityState==="hidden")return;
+  const version=document.querySelector('meta[name="application-version"]')?.content;
+  if(!version)return;
+  checkingForAppUpdate=true;
+  try {
+    const url=new URL("./index.html",location.href);
+    url.searchParams.set("_version_check",String(Date.now()));
+    const response=await fetch(url.href,{cache:"no-store"});
+    if(!response.ok)return;
+    const html=await response.text();
+    const latest=html.match(/<meta\s+name="application-version"\s+content="([^"]+)"/i)?.[1];
+    if(!latest || latest===version)return;
+    if(document.querySelector("form")) {
+      state.feedback="An update is available. Save or cancel your entry, then press Refresh.";
+      const banner=$("#live-update-note");
+      if(banner)banner.textContent=state.feedback;
+    } else refreshApplication(false);
+  } catch {
+    // Keep the existing page usable when connectivity temporarily drops.
+  } finally { checkingForAppUpdate=false; }
+}
+document.addEventListener("pageshow",event=>{if(event.persisted)void checkForAppUpdate();});
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState!=="visible")return;
+  void checkForAppUpdate();
+  if(!state.loading && state.user && state.member)void loadMonth();
+});
 
 async function startup() {
   installPullToRefresh();
