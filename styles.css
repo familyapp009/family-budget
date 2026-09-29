@@ -62,16 +62,6 @@ textarea{min-height:66px;resize:vertical}.row{display:flex;gap:9px;flex-wrap:wra
   .quick-expense-toggle{width:100%;min-height:52px;font-size:16px}
 }
 
-/* One-tap correction directly under the quick expense action. */
-.last-added{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;padding:12px 13px;border:1px solid #cfe3d4;border-radius:12px;background:#eef6ef}
-.last-added strong,.last-added span{display:block}
-.last-added strong{font-size:13px;color:#205542}
-.last-added span{font-size:12px;color:#5f7666;margin-top:3px;font-variant-numeric:tabular-nums}
-.last-added-actions{display:flex;align-items:center;gap:7px;flex:none}
-.last-added-actions .undo{background:#205742;border-color:#205742;color:white}
-.last-added-actions .undo:hover{background:#194533}
-@media(max-width:420px){.last-added{flex-wrap:wrap}.last-added-actions{margin-left:auto}}
-
 /* Dashboard progress: category targets are guidance, not spending envelopes. */
 .total-progress{padding-top:18px;margin-top:17px;border-top:1px solid #ffffff30}
 .total-progress-label{display:flex;gap:8px;justify-content:space-between;align-items:baseline;margin-bottom:10px;font-size:12px;color:#c5d9ce}
@@ -177,11 +167,6 @@ textarea{min-height:66px;resize:vertical}.row{display:flex;gap:9px;flex-wrap:wra
 :root[data-theme="dark"] #quick-expense-entry,
 :root[data-theme="dark"] .progress-help,
 :root[data-theme="dark"] .settings-categories{border-top-color:#344e3b}
-:root[data-theme="dark"] .last-added{background:#25452e;border-color:#4d7d55}
-:root[data-theme="dark"] .last-added strong{color:#b8eac3}
-:root[data-theme="dark"] .last-added span{color:#c2d9c6}
-:root[data-theme="dark"] .last-added-actions .undo{background:#327a4c;border-color:#65a679;color:#fff}
-:root[data-theme="dark"] .last-added-actions .undo:hover{background:#428a5e}
 :root[data-theme="dark"] .total-progress-label{color:#c6decf}
 :root[data-theme="dark"] .total-progress-label strong{color:#fff}
 
@@ -215,4 +200,41 @@ html,body{overscroll-behavior-y:contain}
   .transaction-end{width:100%;justify-content:flex-end;gap:6px;flex-wrap:wrap}
   .transaction-end strong{margin-right:auto}
   .transaction-end button{min-height:34px;padding:7px 10px}
+}
+
+/* Purchase history: swipe left to reveal edit/delete, or use the Options button. */
+.transaction{position:relative;display:block;padding:0;overflow:hidden;isolation:isolate}
+.transaction-surface{
+  position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;
+  gap:9px;padding:12px 0;background:#fff;transform:translateX(0);
+  transition:transform .18s ease;touch-action:pan-y;min-width:0;
+}
+.transaction.is-open .transaction-surface{transform:translateX(-164px)}
+.transaction.is-dragging .transaction-surface{transition:none}
+.transaction-details{flex:1 1 auto}
+.transaction-end{flex:0 0 auto}
+.transaction-actions{
+  position:absolute;right:0;top:0;bottom:0;width:164px;display:grid;
+  grid-template-columns:1fr 1fr;z-index:0;
+}
+.transaction-actions button{
+  min-width:0;min-height:44px;display:grid;place-items:center;border:0;border-radius:0;
+  padding:8px 5px;font-size:12px;font-weight:750;
+}
+.transaction-actions .transaction-action-edit{color:#194c38;background:#dbece0}
+.transaction-actions .transaction-action-edit:hover{background:#cde2d3}
+.transaction-actions .transaction-action-delete{color:#fff;background:#ac3e3c}
+.transaction-actions .transaction-action-delete:hover{background:#8d3332}
+.transaction-end .purchase-options-toggle{white-space:nowrap}
+:root[data-theme="dark"] .transaction-surface{background:#1b2a22}
+:root[data-theme="dark"] .transaction-actions .transaction-action-edit{color:#dff4e3;background:#345840}
+:root[data-theme="dark"] .transaction-actions .transaction-action-edit:hover{background:#476c50}
+:root[data-theme="dark"] .transaction-actions .transaction-action-delete{color:#fff;background:#a84540}
+:root[data-theme="dark"] .transaction-actions .transaction-action-delete:hover{background:#8d3431}
+@media(max-width:620px){
+  .transaction-surface{flex-wrap:wrap;row-gap:5px}
+  .transaction-surface .transaction-details{flex:1 1 100%}
+  .transaction-surface .transaction-end{width:100%;justify-content:flex-end;gap:6px;flex-wrap:wrap}
+  .transaction-surface .transaction-end strong{margin-right:auto}
+  .transaction-surface .transaction-end button{min-height:36px;padding:7px 9px}
 }
