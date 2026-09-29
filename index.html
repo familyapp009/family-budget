@@ -5,10 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#16352d">
   <meta name="description" content="Private, shared family spending guidelines.">
+  <meta name="application-version" content="20260929-auto-update-1">
   <title>Family Budget</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=20260929-swipe-delete-2">
-  <script type="module" src="./app.js?v=20260929-swipe-delete-2"></script>
+  <link rel="stylesheet" href="./styles.css?v=20260929-auto-update-1">
+  <script type="module">
+    // On an iPhone Home Screen launch, always request fresh application code.
+    // Install a same-origin network-only worker to intercept stale shortcut URLs.
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./service-worker.js",{updateViaCache:"none"}).catch(()=>{});
+    }
+    const entry=new URL("./app.js",location.href);
+    entry.searchParams.set("startup",String(Date.now()));
+    import(entry.href).catch(()=>{
+      const root=document.querySelector("#app");
+      if(root)root.textContent="The application could not load. Check your connection and refresh.";
+    });
+  </script>
 </head>
 <body>
   <div id="pull-refresh" class="pull-refresh" role="status" aria-live="polite" aria-atomic="true">↓ Pull to refresh</div>
