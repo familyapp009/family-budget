@@ -84,3 +84,22 @@ test("repeat creates a new dated purchase without retaining the old ID or conver
   assert.throws(()=>repeatPurchaseValues(original,"current-category","2026-09-11","2026-10"),/destination month/);
   assert.throws(()=>repeatPurchaseValues(original,null,"2026-10-02","2026-10"),/category/);
 });
+
+test("deleting a historical purchase updates the balance and only its category progress", () => {
+  const plan={net_income_cents:100000,fixed_costs_cents:20000};
+  const categories=[
+    {id:"lunch",category:"Work lunches",target_cents:12000},
+    {id:"grocery",category:"Groceries",target_cents:30000}
+  ];
+  const purchases=[
+    {id:"a",guideline_id:"lunch",usd_cents:549},
+    {id:"b",guideline_id:"lunch",usd_cents:549},
+    {id:"c",guideline_id:"grocery",usd_cents:2500}
+  ];
+  const before=overview(plan,categories,purchases);
+  const after=overview(plan,categories,purchases.filter(p=>p.id!=="a"));
+  assert.equal(after.remaining-before.remaining,549);
+  assert.equal(before.categories[0].spent-after.categories[0].spent,549);
+  assert.equal(after.categories[1].spent,before.categories[1].spent);
+  assert.equal(after.starting,before.starting);
+});
