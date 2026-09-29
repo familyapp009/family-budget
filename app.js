@@ -454,21 +454,18 @@ async function savePurchase(form) {
   if (note.length>280) throw new Error("Notes can be up to 280 characters.");
   const values={original_amount_cents,currency,guideline_id,spent_on,note};
   const existing=state.purchases.find(p=>p.id===state.editingExpense);
-  let insertedId = null;
   if (state.demo) {
     const d=demoMonths.get(state.month),usd_cents=usdCents(original_amount_cents,currency,d.plan.euro_to_usd);
     if (existing) Object.assign(existing,{...values,usd_cents});
     else {
-      insertedId=uid();
-      d.purchases.unshift({id:insertedId,...values,usd_cents,household_id:"demo",month:state.month,created_at:new Date().toISOString()});
+      d.purchases.unshift({id:uid(),...values,usd_cents,household_id:"demo",month:state.month,created_at:new Date().toISOString()});
     }
   } else if (existing) {
     assertDb(await state.client.from("purchases").update(values).eq("id",existing.id)
       .eq("household_id",state.member.household_id).select("id").single());
   } else {
-    const saved=assertDb(await state.client.from("purchases").insert({...values,household_id:state.member.household_id,month:state.month})
+    assertDb(await state.client.from("purchases").insert({...values,household_id:state.member.household_id,month:state.month})
       .select("id").single());
-    insertedId=saved.id;
   }
   state.editingExpense=null;
   state.expenseComposerOpen=false;
@@ -510,20 +507,17 @@ async function repeatExpense(id) {
     'The "'+sourceCategory.category+'" category is not in the current month. Add it under this month’s Settings before repeating.'
   );
   const values = repeatPurchaseValues(source,destinationCategory.id,currentDate,currentMonth);
-  let insertedId;
   if (state.demo) {
     const destination=demoMonths.get(currentMonth);
-    insertedId=uid();
     destination.purchases.unshift({
-      id:insertedId,...values,household_id:"demo",month:currentMonth,
+      id:uid(),...values,household_id:"demo",month:currentMonth,
       usd_cents:usdCents(values.original_amount_cents,values.currency,destinationPlan.euro_to_usd),
       created_at:new Date().toISOString()
     });
   } else {
-    const row=assertDb(await state.client.from("purchases").insert({
+    assertDb(await state.client.from("purchases").insert({
       ...values,household_id:state.member.household_id,month:currentMonth
     }).select("id").single());
-    insertedId=row.id;
   }
   state.month=currentMonth;
   state.settings=false;
