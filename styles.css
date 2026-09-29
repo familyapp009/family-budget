@@ -203,3 +203,16 @@ html,body{overscroll-behavior-y:contain}
 :root[data-theme="dark"] .pull-refresh{background:#365c44;border-color:#81a98a;color:#f5fff6;box-shadow:0 5px 20px #0008}
 :root[data-theme="dark"] .pull-refresh.is-ready{background:#44815a}
 @media(max-width:670px){.header-refresh{min-height:36px}}
+
+/* Repeat is the primary one-tap action in the transaction history. */
+.transaction-end .repeat-expense{background:#eaf3eb;border-color:#b9d4bf;color:#205742;white-space:nowrap}
+.transaction-end .repeat-expense:hover{background:#dcebdd}
+:root[data-theme="dark"] .transaction-end .repeat-expense{background:#2b5338;border-color:#578266;color:#e1f2e5}
+:root[data-theme="dark"] .transaction-end .repeat-expense:hover{background:#386748}
+@media(max-width:620px){
+  .transaction{flex-wrap:wrap;row-gap:5px}
+  .transaction-details{flex:1 1 100%}
+  .transaction-end{width:100%;justify-content:flex-end;gap:6px;flex-wrap:wrap}
+  .transaction-end strong{margin-right:auto}
+  .transaction-end button{min-height:34px;padding:7px 10px}
+}
