@@ -12,7 +12,7 @@ const state = {
   demo: new URLSearchParams(location.search).get("demo") === "1",
   month: monthNow(), client: null, user: null, member: null, plan: null,
   previous: null, previousGuidelines: [], guidelines: [], purchases: [], householdDefaults: null, obligations: [], budgetDefaultsPage: new URLSearchParams(location.search).has("defaults"),
-  editingExpense: null, editingCategory: null, expenseComposerOpen: false, lastAdded: null, settings: false,
+  editingExpense: null, editingCategory: null, expenseComposerOpen: false, settings: false,
   loading: true, error: "", feedback: "", channel: null, theme: "light", themeAccount: undefined, accountSettings: new URLSearchParams(location.search).has("account")
 };
 const demoMonths = new Map();
@@ -230,16 +230,20 @@ function render() {
   const items = expenses.map(p => {
     const cat = state.guidelines.find(g=>g.id===p.guideline_id)?.category ?? "Category";
     const native = p.currency === "EUR" ? " · €"+moneyInput(p.original_amount_cents) : "";
-    return '<div class="transaction"><div class="transaction-details"><strong>'+clean(cat)+(p.note?' · '+clean(p.note):'')+'</strong><span>'+clean(p.spent_on)+native+'</span></div><div class="transaction-end"><strong>'+formatUsd(p.usd_cents)+'</strong><button class="mini repeat-expense" data-action="repeat-expense" data-id="'+clean(p.id)+'" aria-label="Repeat '+clean(cat)+' purchase today" title="Add another purchase for today using this amount and note">＋ Repeat</button><button class="quiet mini" data-action="edit-expense" data-id="'+clean(p.id)+'" aria-label="Edit purchase">Edit</button><button class="quiet mini" data-action="delete-expense" data-id="'+clean(p.id)+'" aria-label="Delete purchase">×</button></div></div>';
+    const txId = clean(p.id), actionsId = "transaction-actions-"+txId;
+    return '<div class="transaction" data-purchase-id="'+txId+'">'+
+      '<div class="transaction-actions" id="'+actionsId+'" inert aria-hidden="true">'+
+        '<button type="button" class="transaction-action-edit" data-action="edit-expense" data-id="'+txId+'" aria-label="Edit '+clean(cat)+' purchase">Edit</button>'+
+        '<button type="button" class="transaction-action-delete" data-action="delete-expense" data-id="'+txId+'" aria-label="Delete '+clean(cat)+' purchase">Delete</button></div>'+
+      '<div class="transaction-surface">'+
+        '<div class="transaction-details"><strong>'+clean(cat)+(p.note?' · '+clean(p.note):'')+'</strong><span>'+clean(p.spent_on)+native+'</span></div>'+
+        '<div class="transaction-end"><strong>'+formatUsd(p.usd_cents)+'</strong>'+
+          '<button type="button" class="mini repeat-expense" data-action="repeat-expense" data-id="'+txId+'" aria-label="Repeat '+clean(cat)+' purchase today" title="Add another purchase for today using this amount and note">＋ Repeat</button>'+
+          '<button type="button" class="mini purchase-options-toggle" data-action="toggle-purchase-actions" data-id="'+txId+'" aria-controls="'+actionsId+'" aria-expanded="false" aria-label="Show Edit and Delete for '+clean(cat)+' purchase">Options</button>'+
+        '</div></div></div>';
   }).join("");
-  const recent = '<section class="card"><div class="card-header"><div><h2>Purchases</h2><p class="muted">Shared across both phones.</p></div><button class="mini" data-action="export">Export CSV</button></div><div class="transactions">'+(items||'<div class="empty">No purchases recorded this month.</div>')+'</div></section>';
+  const recent = '<section class="card"><div class="card-header"><div><h2>Purchases</h2><p class="muted">Shared across both phones. Swipe left on a purchase for Edit and Delete, or tap Options.</p></div><button class="mini" data-action="export">Export CSV</button></div><div class="transactions">'+(items||'<div class="empty">No purchases recorded this month.</div>')+'</div></section>';
   const composerOpen = state.expenseComposerOpen || Boolean(state.editingExpense);
-  const recentAdd = state.lastAdded?.month === state.month ? expenses.find(p=>p.id===state.lastAdded.id) : null;
-  const undoNotice = recentAdd ? '<div class="last-added" role="status"><div><strong>Purchase added</strong><span>'+
-    clean(state.guidelines.find(g=>g.id===recentAdd.guideline_id)?.category ?? "Purchase")+
-    ' · '+formatUsd(recentAdd.usd_cents)+'</span></div><div class="last-added-actions">'+
-    '<button type="button" class="mini" data-action="edit-expense" data-id="'+clean(recentAdd.id)+'">Edit</button>'+
-    '<button type="button" class="mini undo" data-action="undo-last-add">Undo</button></div></div>' : '';
   const composer = '<section class="card quick-expense '+(composerOpen?'is-open':'')+'" id="quick-expense">'+
     '<div class="card-header"><div><h2>Quick expense</h2><p class="muted">Record a purchase as you make it.</p></div>'+
     '<button class="primary quick-expense-toggle" type="button" data-action="toggle-expense" aria-expanded="'+composerOpen+'" aria-controls="quick-expense-entry">'+
@@ -466,11 +470,10 @@ async function savePurchase(form) {
       .select("id").single());
     insertedId=saved.id;
   }
-  state.lastAdded = insertedId ? {id:insertedId,month:state.month} : null;
   state.editingExpense=null;
   state.expenseComposerOpen=false;
   await loadMonth();
-  toast(existing?"Purchase updated.":"Purchase recorded. You can Edit or Undo it above.");
+  toast(existing?"Purchase updated.":"Purchase recorded. Use Edit or Delete in purchase history to correct it.");
 }
 async function repeatExpense(id) {
   const source = state.purchases.find(p=>p.id===id);
@@ -527,38 +530,26 @@ async function repeatExpense(id) {
   state.editingExpense=null;
   state.editingCategory=null;
   state.expenseComposerOpen=false;
-  state.lastAdded={id:insertedId,month:currentMonth};
   await loadMonth();
-  toast("Purchase repeated for today. Edit or Undo it above.");
-}
-async function undoLastAdd() {
-  const last=state.lastAdded;
-  if(!last || last.month!==state.month) return;
-  if(state.demo) {
-    const d=demoMonths.get(last.month);
-    if(!d?.purchases.some(p=>p.id===last.id)) throw new Error("That purchase is no longer available to undo.");
-    d.purchases=d.purchases.filter(p=>p.id!==last.id);
-  } else {
-    const deleted=assertDb(await state.client.from("purchases").delete()
-      .eq("id",last.id).eq("month",last.month)
-      .eq("household_id",state.member.household_id).eq("recorded_by",state.user.id)
-      .select("id"));
-    if(deleted?.length!==1) throw new Error("Purchase already removed or no longer available to undo. Refresh to check.");
-  }
-  state.lastAdded=null;
-  state.editingExpense=null;
-  state.expenseComposerOpen=false;
-  await loadMonth();
-  toast("Last purchase undone. Your balance has been restored.");
+  toast("Purchase repeated for today. Use Edit or Delete in purchase history to correct it.");
 }
 async function deleteExpense(id) {
-  if (!confirm("Delete this purchase?")) return;
+  const purchase=state.purchases.find(p=>p.id===id);
+  if (!purchase) throw new Error("Purchase not found. Refresh your history and try again.");
+  const category=state.guidelines.find(g=>g.id===purchase.guideline_id)?.category ?? "purchase";
+  const amount=purchase.currency==="EUR" ? "€"+moneyInput(purchase.original_amount_cents) : formatUsd(purchase.original_amount_cents);
+  if (!confirm("Delete "+category+" ("+amount+") dated "+purchase.spent_on+"?\n\nThis permanently removes the purchase from the shared household budget.")) return;
   if (state.demo) {
-    const d=demoMonths.get(state.month);d.purchases=d.purchases.filter(p=>p.id!==id);
-  } else assertDb(await state.client.from("purchases").delete().eq("id",id).eq("household_id",state.member.household_id).select("id").single());
+    const d=demoMonths.get(state.month);
+    if (!d?.purchases.some(p=>p.id===id)) throw new Error("Purchase no longer exists.");
+    d.purchases=d.purchases.filter(p=>p.id!==id);
+  } else {
+    assertDb(await state.client.from("purchases").delete().eq("id",id)
+      .eq("month",state.month).eq("household_id",state.member.household_id).select("id").single());
+  }
   if(state.editingExpense===id) state.editingExpense=null;
-  if(state.lastAdded?.id===id) state.lastAdded=null;
-  await loadMonth(); toast("Purchase removed.");
+  await loadMonth();
+  toast("Purchase deleted. Your balance and category totals have been updated.");
 }
 async function deleteCategory(id) {
   if (state.purchases.some(p=>p.guideline_id===id)) throw new Error("This category has purchases. Move or remove them before deleting it.");
@@ -595,13 +586,13 @@ async function handleAction(button) {
   }
   if (action==="prev-month" || action==="next-month") {
     state.month=shiftMonth(state.month,action==="prev-month"?-1:1);
-    state.settings=false;state.editingExpense=null;state.editingCategory=null;state.expenseComposerOpen=false;state.lastAdded=null;
+    state.settings=false;state.editingExpense=null;state.editingCategory=null;state.expenseComposerOpen=false;
     await loadMonth();return;
   }
   if (action==="signout") {
     const {error}=await state.client.auth.signOut();
     if(error) throw error;
-    state.user=null;state.member=null;state.plan=null;state.householdDefaults=null;state.obligations=[];state.lastAdded=null;
+    state.user=null;state.member=null;state.plan=null;state.householdDefaults=null;state.obligations=[];
     if(state.channel){await state.client.removeChannel(state.channel);state.channel=null;}
     render();return;
   }
@@ -624,13 +615,12 @@ async function handleAction(button) {
   }
   if(action==="close-expense"){state.expenseComposerOpen=false;state.editingExpense=null;render();return;}
   if(action==="edit-expense"){
-    state.lastAdded=null;
     state.editingExpense=id;state.expenseComposerOpen=true;render();
     $("#quick-expense")?.scrollIntoView({behavior:"smooth",block:"start"});
     return;
   }
+  if(action==="toggle-purchase-actions"){const row=button.closest(".transaction");if(row)setPurchaseActions(row,!row.classList.contains("is-open"));return;}
   if(action==="repeat-expense"){await repeatExpense(id);return;}
-  if(action==="undo-last-add"){await undoLastAdd();return;}
   if(action==="delete-expense"){await deleteExpense(id);return;}
   if(action==="delete-category"){await deleteCategory(id);return;}
   if(action==="cancel-edit"){state.editingExpense=null;state.editingCategory=null;state.expenseComposerOpen=false;render();return;}
@@ -707,7 +697,7 @@ document.addEventListener("click",async event=>{
 document.addEventListener("change",async event=>{
   if(event.target.id!=="month-picker")return;
   if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value)){toast("Invalid month.");return;}
-  state.month=event.target.value;state.settings=false;state.editingExpense=null;state.editingCategory=null;state.lastAdded=null;
+  state.month=event.target.value;state.settings=false;state.editingExpense=null;state.editingCategory=null;
   await loadMonth();
 });
 document.addEventListener("submit",async event=>{
