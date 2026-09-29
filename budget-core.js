@@ -61,6 +61,19 @@ export function sameMonth(isoDate, month) {
     new Date(isoDate + "T12:00:00Z").toISOString().slice(0,10) === isoDate;
 }
 
+// New repeat purchases retain the native price and memo, not the old date, ID,
+// converted USD value, or audit timestamp. The database timestamps each new insert.
+export function repeatPurchaseValues(purchase, guidelineId, spentOn, month) {
+  if (!sameMonth(spentOn, month)) throw new Error("The repeated purchase must be dated in the destination month.");
+  if (!guidelineId) throw new Error("Choose a category in the destination month.");
+  const amount = Number(purchase.original_amount_cents);
+  if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error("Invalid original purchase amount.");
+  if (purchase.currency !== "USD" && purchase.currency !== "EUR") throw new Error("Unsupported original purchase currency.");
+  const note = String(purchase.note ?? "");
+  if (note.length > 280) throw new Error("The original purchase note is too long.");
+  return {original_amount_cents:amount,currency:purchase.currency,guideline_id:guidelineId,spent_on:spentOn,note};
+}
+
 export function totalFixedObligations(items, euroToUsd) {
   if (!(Number(euroToUsd) > 0 && Number(euroToUsd) < 10)) throw new Error("Invalid exchange rate.");
   return items.reduce((sum, item) => {
