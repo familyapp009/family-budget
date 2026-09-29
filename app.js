@@ -1,4 +1,4 @@
-import { parseAmount, usdCents, formatUsd, monthNow, shiftMonth, overview, sameMonth, totalFixedObligations } from "./budget-core.js";
+import { parseAmount, usdCents, formatUsd, monthNow, shiftMonth, overview, sameMonth, totalFixedObligations, repeatPurchaseValues } from "./budget-core.js";
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "./config.js";
 
 const $ = (selector) => document.querySelector(selector);
@@ -230,7 +230,7 @@ function render() {
   const items = expenses.map(p => {
     const cat = state.guidelines.find(g=>g.id===p.guideline_id)?.category ?? "Category";
     const native = p.currency === "EUR" ? " · €"+moneyInput(p.original_amount_cents) : "";
-    return '<div class="transaction"><div class="transaction-details"><strong>'+clean(cat)+(p.note?' · '+clean(p.note):'')+'</strong><span>'+clean(p.spent_on)+native+'</span></div><div class="transaction-end"><strong>'+formatUsd(p.usd_cents)+'</strong><button class="quiet mini" data-action="edit-expense" data-id="'+clean(p.id)+'" aria-label="Edit purchase">Edit</button><button class="quiet mini" data-action="delete-expense" data-id="'+clean(p.id)+'" aria-label="Delete purchase">×</button></div></div>';
+    return '<div class="transaction"><div class="transaction-details"><strong>'+clean(cat)+(p.note?' · '+clean(p.note):'')+'</strong><span>'+clean(p.spent_on)+native+'</span></div><div class="transaction-end"><strong>'+formatUsd(p.usd_cents)+'</strong><button class="mini repeat-expense" data-action="repeat-expense" data-id="'+clean(p.id)+'" aria-label="Repeat '+clean(cat)+' purchase today" title="Add another purchase for today using this amount and note">＋ Repeat</button><button class="quiet mini" data-action="edit-expense" data-id="'+clean(p.id)+'" aria-label="Edit purchase">Edit</button><button class="quiet mini" data-action="delete-expense" data-id="'+clean(p.id)+'" aria-label="Delete purchase">×</button></div></div>';
   }).join("");
   const recent = '<section class="card"><div class="card-header"><div><h2>Purchases</h2><p class="muted">Shared across both phones.</p></div><button class="mini" data-action="export">Export CSV</button></div><div class="transactions">'+(items||'<div class="empty">No purchases recorded this month.</div>')+'</div></section>';
   const composerOpen = state.expenseComposerOpen || Boolean(state.editingExpense);
@@ -472,6 +472,65 @@ async function savePurchase(form) {
   await loadMonth();
   toast(existing?"Purchase updated.":"Purchase recorded. You can Edit or Undo it above.");
 }
+async function repeatExpense(id) {
+  const source = state.purchases.find(p=>p.id===id);
+  if (!source) throw new Error("This purchase is no longer available. Refresh and try again.");
+  const sourceCategory = state.guidelines.find(g=>g.id===source.guideline_id);
+  if (!sourceCategory) throw new Error("Could not find the original purchase category.");
+
+  const currentDate = today();
+  const currentMonth = currentDate.slice(0,7);
+  let destinationPlan = state.plan;
+  let destinationCategories = state.guidelines;
+  if (currentMonth !== state.month) {
+    if (state.demo) {
+      const destination = demoMonths.get(currentMonth);
+      destinationPlan = destination?.plan ?? null;
+      destinationCategories = destination?.guidelines ?? [];
+    } else {
+      const householdId = state.member.household_id;
+      const [planResult, categoriesResult] = await Promise.all([
+        state.client.from("monthly_plans").select("*").eq("household_id",householdId)
+          .eq("month",currentMonth).maybeSingle(),
+        state.client.from("monthly_guidelines").select("*").eq("household_id",householdId)
+          .eq("month",currentMonth)
+      ]);
+      destinationPlan = assertDb(planResult);
+      destinationCategories = assertDb(categoriesResult) ?? [];
+    }
+  }
+  if (!destinationPlan) throw new Error("Set up the current month before repeating purchases.");
+  const destinationCategory = currentMonth === state.month
+    ? destinationCategories.find(g=>g.id===source.guideline_id)
+    : destinationCategories.find(g=>g.category.trim().toLowerCase()===sourceCategory.category.trim().toLowerCase());
+  if (!destinationCategory) throw new Error(
+    'The "'+sourceCategory.category+'" category is not in the current month. Add it under this month’s Settings before repeating.'
+  );
+  const values = repeatPurchaseValues(source,destinationCategory.id,currentDate,currentMonth);
+  let insertedId;
+  if (state.demo) {
+    const destination=demoMonths.get(currentMonth);
+    insertedId=uid();
+    destination.purchases.unshift({
+      id:insertedId,...values,household_id:"demo",month:currentMonth,
+      usd_cents:usdCents(values.original_amount_cents,values.currency,destinationPlan.euro_to_usd),
+      created_at:new Date().toISOString()
+    });
+  } else {
+    const row=assertDb(await state.client.from("purchases").insert({
+      ...values,household_id:state.member.household_id,month:currentMonth
+    }).select("id").single());
+    insertedId=row.id;
+  }
+  state.month=currentMonth;
+  state.settings=false;
+  state.editingExpense=null;
+  state.editingCategory=null;
+  state.expenseComposerOpen=false;
+  state.lastAdded={id:insertedId,month:currentMonth};
+  await loadMonth();
+  toast("Purchase repeated for today. Edit or Undo it above.");
+}
 async function undoLastAdd() {
   const last=state.lastAdded;
   if(!last || last.month!==state.month) return;
@@ -570,6 +629,7 @@ async function handleAction(button) {
     $("#quick-expense")?.scrollIntoView({behavior:"smooth",block:"start"});
     return;
   }
+  if(action==="repeat-expense"){await repeatExpense(id);return;}
   if(action==="undo-last-add"){await undoLastAdd();return;}
   if(action==="delete-expense"){await deleteExpense(id);return;}
   if(action==="delete-category"){await deleteCategory(id);return;}
