@@ -175,9 +175,17 @@ function monthPicker() {
     '<input id="month-picker" type="month" value="'+clean(state.month)+'" aria-label="Budget month">' +
     '<button data-action="next-month" aria-label="Next month">›</button></div>';
 }
+function loadingMarkup() {
+  return '<div class="loading-screen" role="status" aria-live="polite" aria-label="Loading Family Budget">'+
+    '<div class="loading-emblem" aria-hidden="true"><span>◇</span></div>'+
+    '<strong>Family Budget</strong>'+
+    '<span class="loading-copy">Syncing household budget</span>'+
+    '<span class="loading-dots" aria-hidden="true"><i></i><i></i><i></i></span>'+
+    '</div>';
+}
 function render() {
   header();
-  if (state.loading) { $("#app").innerHTML='<div class="loading">Loading budget…</div>'; return; }
+  if (state.loading) { $("#app").innerHTML=loadingMarkup(); return; }
   if (state.error) {
     $("#app").innerHTML='<div class="notice warn">'+clean(state.error)+'</div><button data-action="refresh">Retry</button>';
     return;
