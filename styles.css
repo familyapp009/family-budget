@@ -238,3 +238,47 @@ html,body{overscroll-behavior-y:contain}
   .transaction-surface .transaction-end strong{margin-right:auto}
   .transaction-surface .transaction-end button{min-height:36px;padding:7px 9px}
 }
+
+/* App-like loading state used on first launch and while syncing a month. */
+.loading-screen{
+  min-height:min(52svh,520px);display:grid;place-items:center;align-content:center;
+  gap:11px;text-align:center;padding:42px 20px;color:#315346;
+}
+.loading-screen>strong{font-size:18px;letter-spacing:-.02em}
+.loading-copy{font-size:12px;color:#71847a;letter-spacing:.03em}
+.loading-emblem{
+  width:68px;height:68px;border-radius:22px;display:grid;place-items:center;
+  margin-bottom:3px;background:#1b4b3d;color:#f8fff9;
+  box-shadow:0 13px 32px #1b4b3d24;
+  animation:budget-loader-breathe 1.45s ease-in-out infinite;
+}
+.loading-emblem span{
+  display:block;font-size:43px;line-height:1;transform:rotate(0deg);
+  animation:budget-loader-turn 2.9s cubic-bezier(.65,0,.35,1) infinite;
+}
+.loading-dots{display:flex;gap:5px;align-items:center;justify-content:center;height:10px;margin-top:2px}
+.loading-dots i{
+  width:6px;height:6px;border-radius:50%;background:#5f806e;opacity:.35;
+  animation:budget-loader-dot 1.05s ease-in-out infinite;
+}
+.loading-dots i:nth-child(2){animation-delay:.14s}
+.loading-dots i:nth-child(3){animation-delay:.28s}
+@keyframes budget-loader-breathe{
+  0%,100%{transform:scale(.96);box-shadow:0 10px 24px #1b4b3d18}
+  50%{transform:scale(1.04);box-shadow:0 16px 36px #1b4b3d34}
+}
+@keyframes budget-loader-turn{
+  0%,38%{transform:rotate(0deg)}
+  62%,100%{transform:rotate(90deg)}
+}
+@keyframes budget-loader-dot{
+  0%,100%{transform:translateY(0);opacity:.3}
+  50%{transform:translateY(-4px);opacity:1}
+}
+:root[data-theme="dark"] .loading-screen{color:#e1ece4}
+:root[data-theme="dark"] .loading-copy{color:#9eb1a4}
+:root[data-theme="dark"] .loading-emblem{background:#35694b;color:#f6fff7;box-shadow:0 15px 34px #0006}
+:root[data-theme="dark"] .loading-dots i{background:#92c49e}
+@media(prefers-reduced-motion:reduce){
+  .loading-emblem,.loading-emblem span,.loading-dots i{animation:none!important}
+}
