@@ -856,7 +856,7 @@ document.addEventListener("change",event=>{
   if(event.target.closest("#defaults-form"))updateDefaultsPreview();
   if(event.target.closest("#purchase-form"))persistExpenseDraft(event.target.closest("#purchase-form"));
 });
-window.addEventListener("pagehide",()=>persistExpenseDraft());
+globalThis.addEventListener?.("pagehide",()=>persistExpenseDraft());
 // A suspended iOS web app can resume without a new navigation. Check the live
 // document version when foregrounded, and reload only if code has changed.
 let checkingForAppUpdate=false;
