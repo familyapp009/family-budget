@@ -19,6 +19,43 @@ const demoMonths = new Map();
 let toastTimer;
 let themeChangeVersion = 0;
 const themeKey = account => "family-budget:theme:" + (account ?? "guest");
+const expenseDraftKey = (month = state.month) =>
+  "family-budget:expense-draft:" + (state.demo ? "demo" : state.user?.id ?? "guest") + ":" + month;
+const EXPENSE_DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+function readExpenseDraft() {
+  if (state.editingExpense) return null;
+  try {
+    const draft=JSON.parse(localStorage.getItem(expenseDraftKey()) || "null");
+    if(!draft || draft.month!==state.month || !Number.isFinite(draft.saved_at) ||
+      Date.now()-draft.saved_at>EXPENSE_DRAFT_MAX_AGE_MS) return null;
+    return {
+      amount:String(draft.amount ?? ""),
+      currency:draft.currency==="EUR"?"EUR":"USD",
+      category:String(draft.category ?? ""),
+      date:String(draft.date ?? ""),
+      note:String(draft.note ?? "").slice(0,280)
+    };
+  } catch { return null; }
+}
+function persistExpenseDraft(form = $("#purchase-form")) {
+  if (!form || state.editingExpense) return;
+  try {
+    localStorage.setItem(expenseDraftKey(),JSON.stringify({
+      month:state.month,saved_at:Date.now(),
+      amount:form.elements.amount?.value ?? "",
+      currency:form.elements.currency?.value ?? "USD",
+      category:form.elements.category?.value ?? "",
+      date:form.elements.date?.value ?? "",
+      note:form.elements.note?.value ?? ""
+    }));
+  } catch { /* Local storage can be unavailable. */ }
+}
+function clearExpenseDraft() {
+  try { localStorage.removeItem(expenseDraftKey()); } catch { /* Storage can be unavailable. */ }
+}
+function restoreExpenseComposerFromDraft() {
+  if (!state.editingExpense && readExpenseDraft()) state.expenseComposerOpen=true;
+}
 function readTheme(account) {
   try {
     const theme = localStorage.getItem(themeKey(account));
@@ -105,6 +142,7 @@ function loadDemo() {
   state.previous = prior?.plan ?? null;
   state.previousGuidelines = prior?.guidelines ?? [];
   state.loading = false;
+  restoreExpenseComposerFromDraft();
   render();
 }
 async function loadMember() {
@@ -125,8 +163,9 @@ function connectRealtime(householdId) {
       event:"*",schema:"public",table,filter:"household_id=eq."+householdId
     }, () => {
       if (document.visibilityState !== "visible") return;
-      if (document.activeElement?.closest("form")) {
-        state.feedback = "The budget changed. Press Refresh when you finish editing.";
+      if (document.querySelector("form")) {
+        persistExpenseDraft();
+        state.feedback = "The budget changed. Finish or cancel your entry, then refresh.";
         const banner = $("#live-update-note");
         if (banner) banner.textContent = state.feedback;
       } else void loadMonth();
@@ -167,6 +206,7 @@ async function loadMonth() {
     state.error = "";
   } catch (e) { state.error = e.message; }
   state.loading = false;
+  restoreExpenseComposerFromDraft();
   render();
 }
 function monthPicker() {
@@ -390,15 +430,21 @@ function categoryForm() {
 }
 function expenseForm() {
   const purchase = state.purchases.find(p=>p.id===state.editingExpense);
-  const date = purchase?.spent_on ?? (today().startsWith(state.month+"-")?today():state.month+"-01");
-  const amount = purchase ? moneyInput(purchase.original_amount_cents) : "";
-  const choices=state.guidelines.map(c=>'<option value="'+clean(c.id)+'" '+(purchase?.guideline_id===c.id?'selected':'')+'>'+clean(c.category)+'</option>').join("");
+  const draft = purchase ? null : readExpenseDraft();
+  const fallbackDate = today().startsWith(state.month+"-") ? today() : state.month+"-01";
+  const date = purchase?.spent_on ?? (sameMonth(draft?.date ?? "",state.month) ? draft.date : fallbackDate);
+  const amount = purchase ? moneyInput(purchase.original_amount_cents) : draft?.amount ?? "";
+  const currency = purchase?.currency ?? draft?.currency ?? "USD";
+  const category = purchase?.guideline_id ?? draft?.category ?? "";
+  const note = purchase?.note ?? draft?.note ?? "";
+  const choices=state.guidelines.map(c=>'<option value="'+clean(c.id)+'" '+(category===c.id?'selected':'')+'>'+clean(c.category)+'</option>').join("");
   return '<form id="purchase-form">'+
     '<div class="fields"><label>Amount<input name="amount" type="number" min=".01" max="999999999" step=".01" required inputmode="decimal" placeholder="0.00" value="'+clean(amount)+'"></label>'+
-    '<label>Currency<select name="currency"><option value="USD" '+(purchase?.currency!=="EUR"?'selected':'')+'>USD $</option><option value="EUR" '+(purchase?.currency==="EUR"?'selected':'')+'>EUR €</option></select></label></div>'+
+    '<label>Currency<select name="currency"><option value="USD" '+(currency!=="EUR"?'selected':'')+'>USD $</option><option value="EUR" '+(currency==="EUR"?'selected':'')+'>EUR €</option></select></label></div>'+
     '<label>Category<select name="category" required '+(!choices?'disabled':'')+'>'+ (choices||'<option value="">Add a category first</option>')+'</select></label>'+
-    '<label>Date<input name="date" type="date" required value="'+clean(date)+'"></label>'+
-    '<label>Note (optional)<input name="note" maxlength="280" value="'+clean(purchase?.note??"")+'" placeholder="What was it?"></label>'+
+    '<label class="date-field">Date<input name="date" type="date" required value="'+clean(date)+'"></label>'+
+    '<label>Note (optional)<input name="note" maxlength="280" value="'+clean(note)+'" placeholder="What was it?"></label>'+
+    (!purchase?'<p class="draft-hint">Draft stays on this device if you switch to another app.</p>':'')+
     '<div class="row"><button class="primary" type="submit" '+(!choices?'disabled':'')+'>'+(purchase?'Save changes':'Add purchase')+'</button>'+
     '<button type="button" data-action="close-expense">Cancel</button></div></form>';
 }
@@ -475,6 +521,7 @@ async function savePurchase(form) {
     assertDb(await state.client.from("purchases").insert({...values,household_id:state.member.household_id,month:state.month})
       .select("id").single());
   }
+  if (!existing) clearExpenseDraft();
   state.editingExpense=null;
   state.expenseComposerOpen=false;
   await loadMonth();
@@ -670,13 +717,17 @@ async function handleAction(button) {
   if(action==="edit-category"){state.settings=true;state.editingCategory=id;render();return;}
   if(action==="toggle-expense"){
     const wasOpen=state.expenseComposerOpen || Boolean(state.editingExpense);
+    if(wasOpen && !state.editingExpense) clearExpenseDraft();
     state.expenseComposerOpen=!wasOpen;
     state.editingExpense=null;
     render();
     if(state.expenseComposerOpen) $("#purchase-form input[name=amount]")?.focus({preventScroll:true});
     return;
   }
-  if(action==="close-expense"){state.expenseComposerOpen=false;state.editingExpense=null;render();return;}
+  if(action==="close-expense"){
+    if(!state.editingExpense) clearExpenseDraft();
+    state.expenseComposerOpen=false;state.editingExpense=null;render();return;
+  }
   if(action==="edit-expense"){
     state.editingExpense=id;state.expenseComposerOpen=true;render();
     $("#quick-expense")?.scrollIntoView({behavior:"smooth",block:"start"});
@@ -797,8 +848,15 @@ document.addEventListener("submit",async event=>{
   } catch(e){toast(e.message||"Could not save.");}
   finally{if(submit?.isConnected)submit.disabled=false;}
 });
-document.addEventListener("input",event=>{if(event.target.closest("#defaults-form"))updateDefaultsPreview();});
-document.addEventListener("change",event=>{if(event.target.closest("#defaults-form"))updateDefaultsPreview();});
+document.addEventListener("input",event=>{
+  if(event.target.closest("#defaults-form"))updateDefaultsPreview();
+  if(event.target.closest("#purchase-form"))persistExpenseDraft(event.target.closest("#purchase-form"));
+});
+document.addEventListener("change",event=>{
+  if(event.target.closest("#defaults-form"))updateDefaultsPreview();
+  if(event.target.closest("#purchase-form"))persistExpenseDraft(event.target.closest("#purchase-form"));
+});
+window.addEventListener("pagehide",()=>persistExpenseDraft());
 // A suspended iOS web app can resume without a new navigation. Check the live
 // document version when foregrounded, and reload only if code has changed.
 let checkingForAppUpdate=false;
@@ -826,8 +884,14 @@ async function checkForAppUpdate() {
 }
 document.addEventListener("pageshow",event=>{if(event.persisted)void checkForAppUpdate();});
 document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="hidden") {
+    persistExpenseDraft();
+    return;
+  }
   if(document.visibilityState!=="visible")return;
   void checkForAppUpdate();
+  // Do not re-render over a form the user was filling before switching apps.
+  if(document.querySelector("form")) return;
   if(!state.loading && state.user && state.member)void loadMonth();
 });
 
