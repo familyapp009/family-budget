@@ -284,12 +284,22 @@ html,body{overscroll-behavior-y:contain}
 }
 
 /* Quick-expense controls must stay inside the card on narrow iPhone layouts. */
+#purchase-form,
 #purchase-form label,
+#purchase-form .fields,
 #purchase-form .fields > *{min-width:0;max-width:100%}
 #purchase-form input,
 #purchase-form select{min-width:0;max-width:100%;box-sizing:border-box}
-#purchase-form input[type="date"]{display:block;width:100%;min-width:0;max-width:100%}
-#purchase-form .date-field{overflow:hidden}
+#purchase-form .date-field{width:100%;min-width:0;max-width:100%;overflow:visible}
+#purchase-form .date-field input[type="date"]{
+  -webkit-appearance:none;appearance:none;display:block;
+  box-sizing:border-box;width:100%;inline-size:100%;
+  min-width:0;min-inline-size:0;max-width:100%;
+  margin:0;border-radius:10px;text-align:left;
+}
+#purchase-form .date-field input[type="date"]::-webkit-date-and-time-value{
+  min-width:0;text-align:left;
+}
 .draft-hint{margin:-3px 0 0;font-size:11px;color:#7a8c81}
 :root[data-theme="dark"] .draft-hint{color:#9fb2a5}
 @media(max-width:480px){
