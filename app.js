@@ -299,13 +299,12 @@ function render() {
     (composerOpen?'<div id="quick-expense-entry">'+expenseForm()+'</div>':'')+'</section>';
   const latest = [...expenses].sort((a,b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))[0];
   const latestCategory = latest ? state.guidelines.find(g=>g.id===latest.guideline_id)?.category ?? "Purchase" : "";
-  const latestTime = latest?.created_at ? new Date(latest.created_at).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) : "";
-  const latestCard = '<section class="card latest-purchase" aria-label="Latest purchase">'+
-    '<div class="latest-purchase-label">LATEST PURCHASE <span>· Shared household activity</span></div>'+
-    (latest ? '<div class="latest-purchase-row"><div class="latest-purchase-icon" aria-hidden="true">▣</div>'+
-      '<div class="latest-purchase-details"><strong>'+clean(latest.note || latestCategory)+'</strong><span>'+clean(latestCategory)+' · '+clean(latestTime)+'</span></div>'+
-      '<strong class="latest-purchase-amount">'+(latest.currency==="EUR"?"€"+moneyInput(latest.original_amount_cents):formatUsd(latest.original_amount_cents))+'</strong></div>'
-      : '<p class="muted latest-purchase-empty">No purchases recorded this month.</p>')+
+  const latestCard = '<section class="card latest-purchase" aria-label="Last purchase">'+
+    '<div class="latest-purchase-label">Last purchase</div>'+
+    (latest ? '<div class="latest-purchase-row"><strong class="latest-purchase-category">'+clean(latestCategory)+'</strong>'+
+      '<strong class="latest-purchase-amount">'+(latest.currency==="EUR"?"€"+moneyInput(latest.original_amount_cents):formatUsd(latest.original_amount_cents))+'</strong></div>'+
+      (latest.note ? '<div class="latest-purchase-memo" title="'+clean(latest.note)+'">'+clean(latest.note)+'</div>' : '')
+      : '<div class="latest-purchase-memo">No purchases this month</div>')+
     '</section>';
   const controls='<div class="row spread" style="margin-bottom:14px"><span class="muted" id="live-update-note">'+clean(state.feedback)+'</span><div class="row"><button class="quiet mini" data-action="refresh">↻ Refresh</button><button class="mini" data-action="budget-defaults">Budget defaults</button><button class="mini" data-action="settings">'+(state.settings?'Close settings':'Settings')+'</button></div></div>';
   $("#app").innerHTML=intro+sum+composer+latestCard+controls+(state.settings?'<div class="card" style="margin-bottom:20px"><h2>Monthly settings</h2><p class="muted">Only the total automatic obligations belong here. No savings field. These values belong to the selected month.</p>'+monthForm()+'<div class="row" style="margin-top:12px"><button class="mini" data-action="prefill-month-defaults">Load current household defaults into these fields</button></div>'+
