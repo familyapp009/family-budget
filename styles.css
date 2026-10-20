@@ -331,3 +331,12 @@ html,body{overscroll-behavior-y:contain}
 .latest-purchase-memo{font-size:11px;color:#6b7a70;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
 [data-theme="dark"] .latest-purchase-memo{color:#aabdb2}
 @media(max-width:600px){.latest-purchase{top:5px;padding:8px 12px}}
+
+/* Latest purchase: compact on mobile, fixed copy after scrolling */
+.latest-purchase{position:static!important;min-width:0;padding:9px 12px!important}
+.latest-purchase-row{display:flex!important;align-items:center;gap:12px!important;min-width:0;width:100%}
+.latest-purchase-category{display:block;flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px!important;line-height:1.3}
+.latest-purchase-amount{display:block;flex:0 0 auto;margin-left:auto;font-size:13px!important;white-space:nowrap}
+.latest-purchase-label{font-size:10px!important;line-height:1.2;margin-bottom:4px!important}
+.latest-purchase-memo{font-size:11px!important;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.latest-purchase-floating{position:fixed!important;top:calc(env(safe-area-inset-top, 0px) + 6px)!important;z-index:1000;margin:0!important;max-width:1060px;box-shadow:0 6px 20px #0005;pointer-events:none}
