@@ -321,3 +321,13 @@ html,body{overscroll-behavior-y:contain}
 .latest-purchase-amount{white-space:nowrap;font-size:16px;font-variant-numeric:tabular-nums}
 .latest-purchase-empty{margin:0}
 [data-theme="dark"] .latest-purchase-icon{background:#28483c;color:#d7efe0}
+
+/* Compact sticky preview: remains in normal document flow until scrolled */
+.latest-purchase{position:sticky;top:8px;z-index:20;padding:9px 13px;margin-bottom:12px;border-radius:12px;box-shadow:0 4px 14px #00000018}
+.latest-purchase-label{font-size:11px;font-weight:750;letter-spacing:0;text-transform:none;margin-bottom:3px}
+.latest-purchase-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+.latest-purchase-category{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.latest-purchase-amount{font-size:14px;flex:none}
+.latest-purchase-memo{font-size:11px;color:#6b7a70;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+[data-theme="dark"] .latest-purchase-memo{color:#aabdb2}
+@media(max-width:600px){.latest-purchase{top:5px;padding:8px 12px}}
