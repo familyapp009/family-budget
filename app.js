@@ -224,6 +224,7 @@ function loadingMarkup() {
     '</div>';
 }
 function render() {
+  document.querySelector('#latest-purchase-floating')?.remove();
   header();
   if (state.loading) { $("#app").innerHTML=loadingMarkup(); return; }
   if (state.error) {
@@ -926,4 +927,23 @@ async function startup() {
     await loadMonth();
   }catch(e){state.error=e.message;state.loading=false;render();}
 }
+function updateFloatingLatestPurchase() {
+  const original=document.querySelector("#app .latest-purchase");
+  let floating=document.querySelector("#latest-purchase-floating");
+  if(!original || original.getBoundingClientRect().bottom>8){floating?.remove();return;}
+  if(!floating || floating.dataset.source!==original.innerHTML){
+    floating?.remove();
+    floating=original.cloneNode(true);
+    floating.id="latest-purchase-floating";
+    floating.dataset.source=original.innerHTML;
+    floating.classList.add("latest-purchase-floating");
+    floating.setAttribute("aria-hidden","true");
+    document.body.appendChild(floating);
+  }
+  const bounds=document.querySelector(".shell")?.getBoundingClientRect();
+  floating.style.left=Math.max(12,bounds?.left??12)+"px";
+  floating.style.width=Math.min(window.innerWidth-24,bounds?.width??window.innerWidth-24)+"px";
+}
+window.addEventListener("scroll",updateFloatingLatestPurchase,{passive:true});
+window.addEventListener("resize",updateFloatingLatestPurchase,{passive:true});
 void startup();
