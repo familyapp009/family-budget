@@ -297,8 +297,18 @@ function render() {
     '<button class="primary quick-expense-toggle" type="button" data-action="toggle-expense" aria-expanded="'+composerOpen+'" aria-controls="quick-expense-entry">'+
     (composerOpen?'Close':'＋ Add expense')+'</button></div>'+
     (composerOpen?'<div id="quick-expense-entry">'+expenseForm()+'</div>':'')+'</section>';
+  const latest = [...expenses].sort((a,b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))[0];
+  const latestCategory = latest ? state.guidelines.find(g=>g.id===latest.guideline_id)?.category ?? "Purchase" : "";
+  const latestTime = latest?.created_at ? new Date(latest.created_at).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) : "";
+  const latestCard = '<section class="card latest-purchase" aria-label="Latest purchase">'+
+    '<div class="latest-purchase-label">LATEST PURCHASE <span>· Shared household activity</span></div>'+
+    (latest ? '<div class="latest-purchase-row"><div class="latest-purchase-icon" aria-hidden="true">▣</div>'+
+      '<div class="latest-purchase-details"><strong>'+clean(latest.note || latestCategory)+'</strong><span>'+clean(latestCategory)+' · '+clean(latestTime)+'</span></div>'+
+      '<strong class="latest-purchase-amount">'+(latest.currency==="EUR"?"€"+moneyInput(latest.original_amount_cents):formatUsd(latest.original_amount_cents))+'</strong></div>'
+      : '<p class="muted latest-purchase-empty">No purchases recorded this month.</p>')+
+    '</section>';
   const controls='<div class="row spread" style="margin-bottom:14px"><span class="muted" id="live-update-note">'+clean(state.feedback)+'</span><div class="row"><button class="quiet mini" data-action="refresh">↻ Refresh</button><button class="mini" data-action="budget-defaults">Budget defaults</button><button class="mini" data-action="settings">'+(state.settings?'Close settings':'Settings')+'</button></div></div>';
-  $("#app").innerHTML=intro+sum+composer+controls+(state.settings?'<div class="card" style="margin-bottom:20px"><h2>Monthly settings</h2><p class="muted">Only the total automatic obligations belong here. No savings field. These values belong to the selected month.</p>'+monthForm()+'<div class="row" style="margin-top:12px"><button class="mini" data-action="prefill-month-defaults">Load current household defaults into these fields</button></div>'+
+  $("#app").innerHTML=intro+sum+composer+latestCard+controls+(state.settings?'<div class="card" style="margin-bottom:20px"><h2>Monthly settings</h2><p class="muted">Only the total automatic obligations belong here. No savings field. These values belong to the selected month.</p>'+monthForm()+'<div class="row" style="margin-top:12px"><button class="mini" data-action="prefill-month-defaults">Load current household defaults into these fields</button></div>'+
     '<div class="settings-categories"><div class="sec-head"><h2>Category guidelines</h2><button class="mini" data-action="new-category">+ Category</button></div><p class="muted">Adjust the targets here; the everyday dashboard shows progress only.</p>'+
     state.guidelines.map(c=>'<div class="settings-category-row"><div><strong>'+clean(c.category)+'</strong><span>'+formatUsd(c.target_cents)+' target</span></div><button class="mini" data-action="edit-category" data-id="'+clean(c.id)+'">Edit</button></div>').join('')+
     (state.editingCategory ? categoryForm() : '')+'</div></div>':'')+
