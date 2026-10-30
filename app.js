@@ -1,4 +1,4 @@
-import { parseAmount, usdCents, formatUsd, monthNow, shiftMonth, overview, sameMonth, totalFixedObligations, repeatPurchaseValues } from "./budget-core.js";
+import { parseAmount, usdCents, formatUsd, monthNow, shiftMonth, overview, sameMonth, totalFixedObligations, repeatPurchaseValues, carryoverShortfall } from "./budget-core.js";
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "./config.js";
 
 const $ = (selector) => document.querySelector(selector);
@@ -11,7 +11,7 @@ const uid = () => typeof crypto !== "undefined" && crypto.randomUUID ? crypto.ra
 const state = {
   demo: new URLSearchParams(location.search).get("demo") === "1",
   month: monthNow(), client: null, user: null, member: null, plan: null,
-  previous: null, previousGuidelines: [], guidelines: [], purchases: [], householdDefaults: null, obligations: [], budgetDefaultsPage: new URLSearchParams(location.search).has("defaults"),
+  previous: null, previousGuidelines: [], guidelines: [], purchases: [], carryInCents: 0, householdDefaults: null, obligations: [], budgetDefaultsPage: new URLSearchParams(location.search).has("defaults"),
   editingExpense: null, editingCategory: null, expenseComposerOpen: false, settings: false,
   loading: true, error: "", feedback: "", channel: null, theme: "light", themeAccount: undefined, accountSettings: new URLSearchParams(location.search).has("account")
 };
@@ -138,6 +138,9 @@ function loadDemo() {
   state.plan = item?.plan ?? null;
   state.guidelines = item?.guidelines ?? [];
   state.purchases = item?.purchases ?? [];
+  state.carryInCents = carryoverShortfall(state.month,
+    [...demoMonths.values()].map(entry => entry.plan).filter(Boolean),
+    [...demoMonths.values()].flatMap(entry => entry.purchases ?? []));
   const prior = demoMonths.get(shiftMonth(state.month,-1));
   state.previous = prior?.plan ?? null;
   state.previousGuidelines = prior?.guidelines ?? [];
@@ -173,27 +176,45 @@ function connectRealtime(householdId) {
   }
   state.channel = channel.subscribe();
 }
+// Fetch all historical rows, not just the first 1,000 returned by PostgREST.
+// Stable ordering avoids losing or double-counting purchases across page boundaries.
+async function fetchPriorRows(db, table, householdId, month, fields) {
+  const rows = [];
+  const pageSize = 500;
+  for (let offset = 0; ; offset += pageSize) {
+    let query = db.from(table).select(fields)
+      .eq("household_id", householdId).lt("month", month)
+      .order("month", {ascending:true});
+    if (table === "purchases") query = query.order("id", {ascending:true});
+    const batch = assertDb(await query.range(offset, offset + pageSize - 1)) ?? [];
+    rows.push(...batch);
+    if (batch.length < pageSize) return rows;
+  }
+}
 async function loadMonth() {
   selectThemeForAccount();
   if (state.demo) { loadDemo(); return; }
-  if (!state.user) { state.loading = false; render(); return; }
+  if (!state.user) { state.carryInCents = 0; state.loading = false; render(); return; }
   state.loading = true; render();
   try {
     await loadMember();
-    if (!state.member) { state.plan = null; state.loading = false; render(); return; }
+    if (!state.member) { state.plan = null; state.carryInCents = 0; state.loading = false; render(); return; }
     const db = state.client, household_id = state.member.household_id, month = state.month;
-    const [planResult, catResult, purchasesResult, previousResult, defaultsResult, obligationsResult] = await Promise.all([
+    const [planResult, catResult, purchasesResult, previousResult, defaultsResult, obligationsResult, historicalPlans, historicalPurchases] = await Promise.all([
       db.from("monthly_plans").select("*").eq("household_id",household_id).eq("month",month).maybeSingle(),
       db.from("monthly_guidelines").select("*").eq("household_id",household_id).eq("month",month).order("display_order").order("category"),
       db.from("purchases").select("*").eq("household_id",household_id).eq("month",month).order("spent_on",{ascending:false}).order("created_at",{ascending:false}),
       db.from("monthly_plans").select("*").eq("household_id",household_id).lt("month",month).order("month",{ascending:false}).limit(1).maybeSingle(),
       db.from("household_budget_defaults").select("*").eq("household_id",household_id).maybeSingle(),
-      db.from("fixed_obligation_defaults").select("*").eq("household_id",household_id).order("display_order").order("label")
+      db.from("fixed_obligation_defaults").select("*").eq("household_id",household_id).order("display_order").order("label"),
+      fetchPriorRows(db,"monthly_plans",household_id,month,"month,net_income_cents,fixed_costs_cents"),
+      fetchPriorRows(db,"purchases",household_id,month,"id,month,usd_cents")
     ]);
     if (state.month !== month) return;
     state.plan = assertDb(planResult);
     state.guidelines = assertDb(catResult) ?? [];
     state.purchases = assertDb(purchasesResult) ?? [];
+    state.carryInCents = carryoverShortfall(month,historicalPlans,historicalPurchases);
     state.previous = assertDb(previousResult);
     state.householdDefaults = assertDb(defaultsResult);
     state.obligations = assertDb(obligationsResult) ?? [];
@@ -244,17 +265,20 @@ function render() {
     $("#app").innerHTML=intro+'<div class="row spread" style="margin-bottom:14px"><button class="mini" data-action="budget-defaults">Edit recurring defaults</button><button class="quiet mini" data-action="account-settings">Account settings / Set password</button></div><div class="card"><h2>Set up this month</h2><p class="muted">Confirm the normal two-paycheck income and total automatic obligations. They will stay out of the main dashboard.</p>'+monthForm()+'</div>';
     return;
   }
-  const o = overview(state.plan, state.guidelines, state.purchases);
+  const o = overview(state.plan, state.guidelines, state.purchases, state.carryInCents);
   const expenses = state.purchases;
   const totalHasBudget = o.starting > 0;
   const totalBarWidth = totalHasBudget ? Math.max(0, Math.min(100, o.percent)) : 0;
   const totalOver = totalHasBudget && o.remaining < 0;
-  const totalStatus = totalHasBudget ? o.percent+'% of starting balance used' : 'No positive starting balance';
+  const totalStatus = totalHasBudget ? o.percent+'% of '+(o.carryIn>0?'adjusted':'starting')+' balance used' : 'No positive starting balance';
   const totalProgress = '<div class="total-progress"><div class="total-progress-label"><span>Overall spending progress</span><strong>'+clean(totalStatus)+'</strong></div>'+
     '<div class="progress-track overall'+(totalOver?' is-over':'')+'" '+(totalHasBudget?
       'role="progressbar" aria-label="Overall monthly spending" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+totalBarWidth+'" aria-valuetext="'+clean(totalStatus)+'"':
       'aria-hidden="true"')+'><div class="progress-fill" style="width:'+totalBarWidth+'%"></div></div></div>';
-  const sum = '<section class="summary"><p class="eyebrow">Available this month</p><div class="balance '+(o.remaining < 0?'negative':'')+'">'+formatUsd(o.remaining)+'</div><div class="summary-grid"><div><small>Starting balance</small><strong>'+formatUsd(o.starting)+'</strong></div><div><small>Purchases recorded</small><strong>−'+formatUsd(o.spent)+'</strong></div></div>'+totalProgress+'</section>';
+  const rolloverLine = o.carryIn > 0
+    ? '<div class="rollover-line"><span>Previous month shortfall</span><strong>−'+formatUsd(o.carryIn)+'</strong></div>'
+    : '';
+  const sum = '<section class="summary"><p class="eyebrow">Available this month</p><div class="balance '+(o.remaining < 0?'negative':'')+'">'+formatUsd(o.remaining)+'</div><div class="summary-grid"><div><small>'+(o.carryIn>0?'Normal monthly budget':'Starting balance')+'</small><strong>'+formatUsd(o.normalStarting)+'</strong></div><div><small>Purchases recorded</small><strong>−'+formatUsd(o.spent)+'</strong></div></div>'+rolloverLine+totalProgress+'</section>';
   const rows = o.categories.map(c => {
     const hasTarget = Number(c.target_cents) > 0;
     const ratio = hasTarget ? c.percent : null;
@@ -711,7 +735,7 @@ async function handleAction(button) {
   if (action==="signout") {
     const {error}=await state.client.auth.signOut();
     if(error) throw error;
-    state.user=null;state.member=null;state.plan=null;state.householdDefaults=null;state.obligations=[];
+    state.user=null;state.member=null;state.plan=null;state.carryInCents=0;state.householdDefaults=null;state.obligations=[];
     if(state.channel){await state.client.removeChannel(state.channel);state.channel=null;}
     render();return;
   }
