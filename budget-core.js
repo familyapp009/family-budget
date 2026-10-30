@@ -67,7 +67,7 @@ export function overview(plan, guidelines, purchases, carryInCents = 0) {
 // No historical carryovers are stored, so correcting an old purchase recalculates
 // later months without accumulating the same negative amount twice.
 export function carryoverShortfall(targetMonth, historicalPlans, historicalPurchases) {
-  if (!/^\\d{4}-(0[1-9]|1[0-2])$/.test(targetMonth)) throw new Error("Invalid month.");
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(targetMonth)) throw new Error("Invalid month.");
   const spentByMonth = new Map();
   for (const purchase of historicalPurchases) {
     if (purchase.month >= targetMonth) continue;
