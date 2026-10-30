@@ -2,7 +2,7 @@
 
 A small, mobile-first shared household spending tracker. Static GitHub Pages frontend; Supabase for authenticated household records.
 
-**Core rule:** remaining = normal two-paycheck net income − total automatic monthly obligations − manually recorded purchases. Savings are intentionally **not** calculated, allocated, or tracked. Guidelines may go negative without moving money between categories.
+**Core rule:** remaining = normal two-paycheck net income − total automatic monthly obligations − previous month shortfall − manually recorded purchases. Negative balances carry forward automatically until covered; positive balances reset to zero at the next month. Savings are intentionally **not** calculated, allocated, or tracked. Guidelines may go negative without moving money between categories.
 
 ## Current status
 
@@ -13,7 +13,7 @@ The database is configured with row-level security. Live user invitations and ho
 ## Features
 
 - Month navigation, with previous month's income, fixed obligations and guideline amounts offered as editable defaults
-- Overall remaining monthly balance, spending guidelines, optional notes, transaction history and CSV export
+- Overall remaining monthly balance, automatic negative-only rollover from earlier months, spending guidelines, optional notes, transaction history and CSV export
 - USD and EUR purchase entry; exchange rate fixed per purchase when first recorded
 - Purchase edit and delete; household realtime refresh and refresh-on-return
 - Separate authenticated users assigned to the same household
@@ -59,3 +59,11 @@ The sample entries stay only in memory and disappear on reload. The demo never w
 The two-paycheck net figure and seven confirmed automatic obligations have been seeded **privately in Supabase** rather than committed to this public repository. Review them from **Edit recurring defaults** before creating the first month. The car-paycheck allotment is already reflected in deposited net pay and is not counted again. Card-billed subscriptions that have not been reconciled and a possible additional future daycare cost were deliberately not included. No savings target or automatic savings transfer is used.
 
 Changes to household defaults only prefill **new** months. To change an existing month, open its Monthly settings, optionally load the updated household defaults into the editable fields, and explicitly save. Purchases already recorded preserve their USD snapshot when the exchange rate changes.
+
+## Automatic negative rollover
+
+The dashboard's **Available this month** total subtracts any outstanding shortfall from previous configured months. When a month ends negative, that amount reduces the following month's spendable starting balance. If a later month has enough room to cover the shortfall, its excess does **not** roll forward as a credit. A still-uncovered portion carries forward again.
+
+The app computes this adjustment from historical monthly plans and purchase totals on each load. It does **not** create a purchase, change category totals, edit prior records, or store a separate rollover ledger. Correcting an older purchase or updating its month's income/obligations recalculates affected future months on the next refresh or household sync. The adjustment appears as a separate **Previous month shortfall** line in the summary when applicable.
+
+The rollover is provisional while a previous month is still being edited. If a month has no plan, the outstanding shortfall waits for the next configured month. All historical queries are scoped to the signed-in household with Supabase row-level security and paginated to avoid silently truncating a long purchase history.
