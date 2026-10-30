@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {parseAmount, usdCents, shiftMonth, overview, sameMonth, totalFixedObligations, usagePercent, repeatPurchaseValues} from "../budget-core.js";
+import {parseAmount, usdCents, shiftMonth, overview, sameMonth, totalFixedObligations, usagePercent, repeatPurchaseValues, carryoverShortfall} from "../budget-core.js";
 test("currency and invalid amounts", () => {
   assert.equal(parseAmount("75"), 7500);
   assert.equal(parseAmount("75.05"), 7505);
@@ -102,4 +102,89 @@ test("deleting a historical purchase updates the balance and only its category p
   assert.equal(before.categories[0].spent-after.categories[0].spent,549);
   assert.equal(after.categories[1].spent,before.categories[1].spent);
   assert.equal(after.starting,before.starting);
+});
+
+test("negative monthly balance automatically reduces the following month's starting capacity", () => {
+  const plans=[
+    {month:"2026-10",net_income_cents:100000,fixed_costs_cents:20000}
+  ];
+  const purchases=[{month:"2026-10",usd_cents:110000}];
+  const carry=carryoverShortfall("2026-11",plans,purchases);
+  assert.equal(carry,30000);
+  const november=overview({net_income_cents:100000,fixed_costs_cents:20000},[],[],carry);
+  assert.equal(november.normalStarting,80000);
+  assert.equal(november.starting,50000);
+  assert.equal(november.carryIn,30000);
+  assert.equal(november.spent,0);
+  assert.equal(november.remaining,50000);
+});
+
+test("only negative balances carry; a later positive month clears the original shortfall", () => {
+  const plans=[
+    {month:"2026-11",net_income_cents:100000,fixed_costs_cents:20000},
+    {month:"2026-10",net_income_cents:100000,fixed_costs_cents:20000},
+    {month:"2026-12",net_income_cents:100000,fixed_costs_cents:20000}
+  ];
+  const purchases=[
+    {month:"2026-10",usd_cents:110000},
+    {month:"2026-11",usd_cents:25000},
+    {month:"2026-12",usd_cents:65000}
+  ];
+  assert.equal(carryoverShortfall("2026-10",plans,purchases),0);
+  assert.equal(carryoverShortfall("2026-11",plans,purchases),30000);
+  assert.equal(carryoverShortfall("2026-12",plans,purchases),0);
+  assert.equal(carryoverShortfall("2027-01",plans,purchases),0);
+});
+
+test("rolling deficit persists only by the uncovered amount and is never counted twice", () => {
+  const plans=[
+    {month:"2026-10",net_income_cents:50000,fixed_costs_cents:0},
+    {month:"2026-11",net_income_cents:30000,fixed_costs_cents:0},
+    {month:"2026-12",net_income_cents:60000,fixed_costs_cents:0}
+  ];
+  const purchases=[{month:"2026-10",usd_cents:90000},{month:"2026-11",usd_cents:10000}];
+  assert.equal(carryoverShortfall("2026-11",plans,purchases),40000);
+  // November covers 30,000 of its 40,000 carry, but spends another 10,000.
+  assert.equal(carryoverShortfall("2026-12",plans,purchases),20000);
+  assert.equal(carryoverShortfall("2027-01",plans,purchases),0);
+});
+
+test("editing or deleting an older purchase recalculates all later carryovers", () => {
+  const plans=[
+    {month:"2026-12",net_income_cents:30000,fixed_costs_cents:0},
+    {month:"2026-10",net_income_cents:50000,fixed_costs_cents:0},
+    {month:"2026-11",net_income_cents:10000,fixed_costs_cents:0}
+  ];
+  const original=[{month:"2026-10",usd_cents:75000},{month:"2026-11",usd_cents:5000}];
+  assert.equal(carryoverShortfall("2026-12",plans,original),20000);
+  const corrected=[{month:"2026-10",usd_cents:58000},{month:"2026-11",usd_cents:5000}];
+  assert.equal(carryoverShortfall("2026-12",plans,corrected),3000);
+  const removed=[{month:"2026-11",usd_cents:5000}];
+  assert.equal(carryoverShortfall("2026-12",plans,removed),0);
+});
+
+test("carryover ignores the target month and future months and respects year boundaries", () => {
+  const plans=[
+    {month:"2026-12",net_income_cents:50000,fixed_costs_cents:10000},
+    {month:"2027-01",net_income_cents:50000,fixed_costs_cents:10000}
+  ];
+  const purchases=[
+    {month:"2026-12",usd_cents:55000},
+    {month:"2027-01",usd_cents:999999},
+    {month:"2027-02",usd_cents:999999}
+  ];
+  assert.equal(carryoverShortfall("2027-01",plans,purchases),15000);
+  assert.throws(()=>carryoverShortfall("2027-13",plans,purchases),/month/);
+});
+
+test("carryover never appears in guideline spending or recorded purchase totals", () => {
+  const guideline=[{id:"food",category:"Food",target_cents:10000}];
+  const o=overview({net_income_cents:100000,fixed_costs_cents:20000},guideline,
+    [{guideline_id:"food",usd_cents:2500}],30000);
+  assert.equal(o.starting,50000);
+  assert.equal(o.remaining,47500);
+  assert.equal(o.spent,2500);
+  assert.equal(o.categories[0].spent,2500);
+  assert.equal(o.percent,5);
+  assert.throws(()=>overview({net_income_cents:100000,fixed_costs_cents:20000},[],[],-1),/shortfall/);
 });
