@@ -29,8 +29,12 @@ export function usagePercent(spentCents, targetCents) {
   if (target <= 0) return null; // No guideline set; never suggest that spending is 100% used.
   return Math.round((spent / target) * 100);
 }
-export function overview(plan, guidelines, purchases) {
-  const starting = Number(plan.net_income_cents) - Number(plan.fixed_costs_cents);
+export function overview(plan, guidelines, purchases, carryInCents = 0) {
+  // Rollover changes spending capacity, not income, fixed costs, or purchase totals.
+  const normalStarting = Number(plan.net_income_cents) - Number(plan.fixed_costs_cents);
+  const carryIn = Number(carryInCents);
+  if (!Number.isSafeInteger(carryIn) || carryIn < 0) throw new Error("Invalid previous month shortfall.");
+  const starting = normalStarting - carryIn;
   const spent = purchases.reduce((sum, item) => sum + Number(item.usd_cents), 0);
   const byGuidelineId = new Map();
   for (const item of purchases) {
@@ -48,6 +52,8 @@ export function overview(plan, guidelines, purchases) {
     };
   });
   return {
+    normalStarting,
+    carryIn,
     starting,
     spent,
     remaining: starting - spent,
@@ -55,6 +61,31 @@ export function overview(plan, guidelines, purchases) {
     categories: categoryRows
   };
 }
+// Recompute the amount owed by the selected month from prior configured months.
+// Each month's income covers previous shortfall first. A positive balance resets
+// to zero rather than rolling forward; purchases are never duplicated or altered.
+// No historical carryovers are stored, so correcting an old purchase recalculates
+// later months without accumulating the same negative amount twice.
+export function carryoverShortfall(targetMonth, historicalPlans, historicalPurchases) {
+  if (!/^\\d{4}-(0[1-9]|1[0-2])$/.test(targetMonth)) throw new Error("Invalid month.");
+  const spentByMonth = new Map();
+  for (const purchase of historicalPurchases) {
+    if (purchase.month >= targetMonth) continue;
+    const cents = Number(purchase.usd_cents);
+    if (!Number.isSafeInteger(cents) || cents < 0) throw new Error("Invalid historical purchase.");
+    spentByMonth.set(purchase.month, (spentByMonth.get(purchase.month) ?? 0) + cents);
+  }
+  let shortfall = 0;
+  const plans = [...historicalPlans].sort((a, b) => a.month.localeCompare(b.month));
+  for (const plan of plans) {
+    if (plan.month >= targetMonth) break;
+    const normalStarting = Number(plan.net_income_cents) - Number(plan.fixed_costs_cents);
+    if (!Number.isSafeInteger(normalStarting)) throw new Error("Invalid historical budget.");
+    shortfall = Math.max(0, shortfall + (spentByMonth.get(plan.month) ?? 0) - normalStarting);
+  }
+  return shortfall;
+}
+
 export function sameMonth(isoDate, month) {
   return /^\d{4}-\d\d-\d\d$/.test(isoDate) && isoDate.startsWith(month + "-") &&
     !Number.isNaN(new Date(isoDate + "T12:00:00Z").valueOf()) &&
