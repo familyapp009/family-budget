@@ -262,7 +262,12 @@ function render() {
   const intro = '<div class="page-head"><div><p class="eyebrow">Household spending</p><h1>'+clean(monthLabel(state.month))+
     '</h1><p class="muted">One balance. Flexible guidelines. No savings calculations.</p></div>'+monthPicker()+'</div>';
   if (!state.plan) {
-    $("#app").innerHTML=intro+'<div class="row spread" style="margin-bottom:14px"><button class="mini" data-action="budget-defaults">Edit recurring defaults</button><button class="quiet mini" data-action="account-settings">Account settings / Set password</button></div><div class="card"><h2>Set up this month</h2><p class="muted">Confirm the normal two-paycheck income and total automatic obligations. They will stay out of the main dashboard.</p>'+monthForm()+'</div>';
+    // Show the incoming adjustment before creating a month. This is calculated
+    // from household history, not stored as a purchase or extra obligation.
+    const rolloverPreview = state.carryInCents > 0
+      ? '<div class="rollover-preview" role="status"><div><strong>Automatic negative rollover</strong><span>Previous months’ outstanding shortfall</span></div><strong class="rollover-preview-amount">−'+formatUsd(state.carryInCents)+'</strong></div>'
+      : '<p class="rollover-preview-empty">Automatic negative rollover is on. No outstanding shortfall.</p>';
+    $("#app").innerHTML=intro+'<div class="row spread" style="margin-bottom:14px"><button class="mini" data-action="budget-defaults">Edit recurring defaults</button><button class="quiet mini" data-action="account-settings">Account settings / Set password</button></div><div class="card"><h2>Set up this month</h2><p class="muted">Confirm the normal two-paycheck income and total automatic obligations. They will stay out of the main dashboard.</p>'+rolloverPreview+monthForm()+'</div>';
     return;
   }
   const o = overview(state.plan, state.guidelines, state.purchases, state.carryInCents);
