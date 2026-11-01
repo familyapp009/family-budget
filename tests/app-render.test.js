@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 // referenced from template expressions (e.g., the former undoNotice regression).
 test("sample dashboard renders complete purchase history with swipe actions", async () => {
   const app={innerHTML:""}, header={innerHTML:""};
+  const handlers=new Map();
   const elements={"#app":app,"#header-tools":header};
   const originalDocument=globalThis.document;
   const originalLocation=globalThis.location;
@@ -24,7 +25,7 @@ test("sample dashboard renders complete purchase history with swipe actions", as
     globalThis.document={
       documentElement:{dataset:{}},
       querySelector(selector){return elements[selector] ?? null;},
-      addEventListener(){}
+      addEventListener(name,callback){if(!handlers.has(name))handlers.set(name,[]);handlers.get(name).push(callback);}
     };
     await import("../app.js");
     assert.match(app.innerHTML,/Family Budget|Household spending/);
@@ -38,6 +39,13 @@ test("sample dashboard renders complete purchase history with swipe actions", as
     assert.match(app.innerHTML,/value="5\.49"/);
     assert.match(app.innerHTML,/value="Subway"/);
     assert.match(app.innerHTML,/Draft stays on this device if you switch to another app/);
+    // A new month has no plan yet; verify rollover status is already visible
+    // on the setup screen, before pressing Create month.
+    assert.ok(handlers.get("change")?.length);
+    await handlers.get("change")[0]({target:{id:"month-picker",value:"2028-08"}});
+    assert.match(app.innerHTML,/Set up this month/);
+    assert.match(app.innerHTML,/Automatic negative rollover is on/);
+    assert.match(app.innerHTML,/No outstanding shortfall/);
   } finally {
     globalThis.document=originalDocument;
     globalThis.location=originalLocation;
